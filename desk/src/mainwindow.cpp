@@ -10,6 +10,7 @@
 #include <QScrollBar>
 #include <QMenu>
 #include <QAction>
+#include <QSplitter>
 
 // 通用波特率列表
 static const int kBaudRates[] = {
@@ -174,10 +175,12 @@ void MainWindow::setupUI()
 
     mainLayout->addWidget(m_funcBar);
 
-    // ---- 3. 接收区（气泡） ----
+    // ---- 3/4. 接收区 + 发送区（可拖拽分隔） ----
     auto *receiveLabel = new QLabel("接收", this);
     receiveLabel->setStyleSheet("font-weight: bold;");
     mainLayout->addWidget(receiveLabel);
+
+    auto *splitter = new QSplitter(Qt::Vertical, this);
 
     m_receiveView = new QTextEdit(this);
     m_receiveView->setReadOnly(true);
@@ -201,9 +204,9 @@ void MainWindow::setupUI()
                 menu.exec(m_receiveView->mapToGlobal(pos));
             });
 
-    mainLayout->addWidget(m_receiveView, 1);
+    splitter->addWidget(m_receiveView);
 
-    // ---- 4. 发送区 ----
+    // 发送区
     auto *sendWidget = new QWidget(this);
     auto *sendLayout = new QHBoxLayout(sendWidget);
     sendLayout->setContentsMargins(0, 0, 0, 0);
@@ -217,32 +220,24 @@ void MainWindow::setupUI()
         "  font-size: 13px;"
         "}"
     );
-    m_sendEdit->setFixedHeight(70);
     sendLayout->addWidget(m_sendEdit, 1);
 
     m_sendBtn = new QPushButton("发送", this);
-    m_sendBtn->setFixedSize(80, 70);
+    m_sendBtn->setFixedWidth(80);
     m_sendBtn->setEnabled(false);
     m_sendBtn->setStyleSheet(
         "QPushButton { font-size: 15px; font-weight: bold; }");
     connect(m_sendBtn, &QPushButton::clicked, this, &MainWindow::onSendData);
     sendLayout->addWidget(m_sendBtn);
 
-    mainLayout->addWidget(sendWidget);
+    splitter->addWidget(sendWidget);
+
+    mainLayout->addWidget(splitter, 1);
 
     // ---- 5. 底部：操作日志 ----
-    auto *logHeader = new QWidget(this);
-    auto *logHeaderLayout = new QHBoxLayout(logHeader);
-    logHeaderLayout->setContentsMargins(0, 0, 0, 0);
     auto *logLabel = new QLabel("操作日志", this);
     logLabel->setStyleSheet("font-weight: bold; color: #6272a4;");
-    logHeaderLayout->addWidget(logLabel);
-    logHeaderLayout->addStretch();
-    m_clearLogBtn = new QPushButton("清空日志", this);
-    m_clearLogBtn->setFixedWidth(90);
-    connect(m_clearLogBtn, &QPushButton::clicked, this, &MainWindow::onClearLog);
-    logHeaderLayout->addWidget(m_clearLogBtn);
-    mainLayout->addWidget(logHeader);
+    mainLayout->addWidget(logLabel);
 
     m_logView = new QTextEdit(this);
     m_logView->setReadOnly(true);
@@ -257,6 +252,16 @@ void MainWindow::setupUI()
         "  padding: 4px;"
         "}"
     );
+    // 右键菜单（清空）
+    m_logView->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_logView, &QWidget::customContextMenuRequested,
+            this, [this](const QPoint &pos) {
+                QMenu menu;
+                QAction *clearAction = menu.addAction("清空日志");
+                connect(clearAction, &QAction::triggered,
+                        this, &MainWindow::onClearLog);
+                menu.exec(m_logView->mapToGlobal(pos));
+            });
     mainLayout->addWidget(m_logView);
 
     setCentralWidget(centralWidget);
@@ -454,9 +459,8 @@ void MainWindow::appendBubble(const QString &text, bool sent)
         // 靠右，绿色气泡
         html = QString(
             "<table width='100%'><tr>"
-            "<td>&nbsp;</td>"
-            "<td style='text-align: left; width: auto;'>"
-            "  <table style='background: #2d5a27; border-radius: 10px;"
+            "<td>"
+            "  <table align='right' style='background: #2d5a27; border-radius: 10px;"
             "              padding: 6px 12px; margin: 2px 0;'>"
             "    <tr><td style='color: #a6e3a1; white-space: pre-wrap;'>%1</td></tr>"
             "  </table>"
@@ -467,13 +471,12 @@ void MainWindow::appendBubble(const QString &text, bool sent)
         // 靠左，深色气泡
         html = QString(
             "<table width='100%'><tr>"
-            "<td style='text-align: left; width: auto;'>"
+            "<td>"
             "  <table style='background: #313244; border-radius: 10px;"
             "              padding: 6px 12px; margin: 2px 0;'>"
             "    <tr><td style='color: #cdd6f4; white-space: pre-wrap;'>%1</td></tr>"
             "  </table>"
             "</td>"
-            "<td>&nbsp;</td>"
             "</tr></table>"
         ).arg(escaped);
     }

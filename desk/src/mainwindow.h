@@ -74,7 +74,6 @@ private:
 
     // 底部：操作日志
     QTextEdit      *m_logView;
-    QPushButton    *m_clearLogBtn;
 };
 
 #endif // MAINWINDOW_H
