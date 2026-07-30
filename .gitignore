@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE / Editor
+.vscode/
+.idea/
+*.user
+*.suo
+
+# Build outputs
+desk/build/*
+*/build/
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolib/
+.piolibdeps/
+
+# Binary / generated
+*.o
+*.elf
+*.bin
+*.hex
+*.out
+*.map
