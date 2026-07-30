@@ -38,7 +38,7 @@ bool ble_adv_start(const SensorPacket &packet, uint32_t duration_ms) {
     NimBLEDevice::init("");
     NimBLEDevice::setPower(ESP_PWR_LVL_P3);
     advertising = NimBLEDevice::getAdvertising();
-    advertising->setAdvertisementType(BLE_HCI_ADV_TYPE_ADV_NONCONN_IND);
+    advertising->setConnectableMode(BLE_GAP_CONN_MODE_NON);
   }
 
   NimBLEAdvertisementData data;
