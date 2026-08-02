@@ -4,8 +4,8 @@
 
 constexpr uint16_t DEVICE_ID = 10001;
 constexpr uint8_t PROTOCOL_VERSION = 1;
-constexpr uint8_t I2C_SDA_PIN = 8;
-constexpr uint8_t I2C_SCL_PIN = 9;
+constexpr uint8_t I2C_SDA_PIN = 4;
+constexpr uint8_t I2C_SCL_PIN = 5;
 constexpr uint32_t SAMPLE_INTERVAL_SEC = 300;
 constexpr uint32_t ADVERTISE_DURATION_MS = 3000;
 

@@ -8,7 +8,7 @@
 |------|------|
 | MCU | ESP32-C3 (Mini 开发板) |
 | 传感器 | SHT40 (I2C, 地址 0x44) |
-| I2C | SDA=GPIO8, SCL=GPIO9 |
+| I2C | SDA=GPIO4, SCL=GPIO5 |
 | 供电 | USB 或电池 (ADC 引脚 BATTERY_ADC_PIN) |
 
 ## 烧录指南
@@ -94,8 +94,8 @@ ID=<device_id> C=<counter> T=<temp_°C> H=<humi_%> B=<battery_mV> TAG=<auth_tag_
 
 | 功能 | 引脚 |
 |------|------|
-| I2C SDA | GPIO8 |
-| I2C SCL | GPIO9 |
+| I2C SDA | GPIO4 |
+| I2C SCL | GPIO5 |
 | 电池 ADC | 未启用 (BATTERY_ADC_PIN = -1) |
 
 所有配置项见 [`src/config.h`](src/config.h)。
