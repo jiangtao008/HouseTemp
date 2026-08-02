@@ -129,8 +129,16 @@ void Protocol::handleResponse(const QJsonObject &obj)
 
     // 根据 cmd 或字段特征派发
     QString cmd = obj.value("cmd").toString();
+    QString event = obj.value("event").toString();
 
-    if (cmd == "reboot") {
+    // 固件主动上报：设备已完成启动（用于重启后确认设备回到在线）
+    if (event == "boot") {
+        emit bootReceived(obj.value("gateway").toString());
+        return;
+    }
+
+    // 重启确认：固件新版回复带 cmd:"reboot"；兼容旧版仅有 action:"rebooting"
+    if (cmd == "reboot" || obj.value("action").toString() == "rebooting") {
         emit rebootResult();
         return;
     }

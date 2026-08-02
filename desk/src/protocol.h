@@ -46,6 +46,8 @@ signals:
     void setBatchResult(bool ok, int changed, bool persisted);
     /// 重启结果
     void rebootResult();
+    /// 设备上线事件（重启完成后固件主动上报）
+    void bootReceived(const QString &gateway);
     /// 错误响应
     void errorReceived(int id, const QString &code,
                        const QString &param, const QString &message);

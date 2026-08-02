@@ -3,7 +3,6 @@
  *
  * 1.  Direct TFT fillScreen test → confirms SPI / pins / display work
  * 2.  LVGL init → draws a simple label with default font (Montserrat 12)
- * 3.  Reports all steps over Serial so you know where it fails
  */
 #pragma once
 
@@ -26,8 +25,6 @@ static void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
   uint32_t w = area->x2 - area->x1 + 1;
   uint32_t h = area->y2 - area->y1 + 1;
 
-  Serial.printf("[FLUSH] %u×%u @(%u,%u)\n", w, h, area->x1, area->y1);
-
   tft.startWrite();
   tft.setAddrWindow(area->x1, area->y1, w, h);
   // 关键: swap=false!
@@ -42,10 +39,8 @@ static void my_disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
 void test_lvgl_main() {
   Serial.begin(115200);
   delay(300);
-  Serial.println("\n\n=== LVGL MINIMAL TEST ===");
 
   // ── Step 1: Direct TFT test ──────────────────────────────────────────────
-  Serial.println("Step 1: TFT_eSPI direct test …");
   pinMode(TFT_BL_PIN, OUTPUT);
   digitalWrite(TFT_BL_PIN, HIGH);        // backlight on now
 
@@ -73,23 +68,20 @@ void test_lvgl_main() {
   tft.writecommand(0x21);   // INVON (display inversion on)
   delay(10);
 
-  tft.fillScreen(TFT_RED);    Serial.println("  RED");    delay(800);
-  tft.fillScreen(TFT_GREEN);  Serial.println("  GREEN");  delay(800);
-  tft.fillScreen(TFT_BLUE);   Serial.println("  BLUE");   delay(800);
-  tft.fillScreen(TFT_WHITE);  Serial.println("  WHITE");  delay(800);
-  tft.fillScreen(TFT_BLACK);  Serial.println("  BLACK → if you saw R/G/B/W the TFT works");
+  tft.fillScreen(TFT_RED);    delay(800);
+  tft.fillScreen(TFT_GREEN);  delay(800);
+  tft.fillScreen(TFT_BLUE);   delay(800);
+  tft.fillScreen(TFT_WHITE);  delay(800);
+  tft.fillScreen(TFT_BLACK);
 
   // If you don't see the colours above, STOP here and check your wiring.
   delay(1000);
 
   // ── Step 2: LVGL init ────────────────────────────────────────────────────
-  Serial.println("Step 2: lv_init() …");
   lv_init();
 
-  Serial.println("Step 3: draw buffer …");
   lv_disp_draw_buf_init(&disp_buf, buf, NULL, 240 * 40);
 
-  Serial.println("Step 4: display driver …");
   lv_disp_drv_init(&disp_drv);
   disp_drv.hor_res  = 240;
   disp_drv.ver_res  = 320;
@@ -97,11 +89,8 @@ void test_lvgl_main() {
   disp_drv.draw_buf = &disp_buf;
 
   lv_disp_drv_register(&disp_drv);
-  Serial.println("  driver registered");
 
   // ── Step 5: A trivial UI ────────────────────────────────────────────────
-  Serial.println("Step 5: create UI …");
-
   // Blue background so we can tell LVGL rendered something
   lv_obj_set_style_bg_color(lv_scr_act(), lv_color_make(0x00, 0x40, 0x80), 0);
   lv_obj_set_style_bg_opa(lv_scr_act(), LV_OPA_COVER, 0);
@@ -111,18 +100,14 @@ void test_lvgl_main() {
   lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
 
   // ── Step 6: Force a render ───────────────────────────────────────────────
-  Serial.println("Step 6: lv_timer_handler() x3 …");
   lv_timer_handler();
   delay(50);
   lv_timer_handler();
   delay(50);
   lv_timer_handler();
 
-  Serial.println("Step 7: invalidate + one more flush …");
   lv_obj_invalidate(lv_scr_act());
   lv_timer_handler();
-
-  Serial.println("=== TEST DONE – screen should show text on blue bg ===");
 }
 
 // ── Idle (call from loop) ───────────────────────────────────────────────────

@@ -27,12 +27,14 @@ set(SOURCES
     src/mainwindow.cpp
     src/serialport.cpp
     src/protocol.cpp
+    src/configdialog.cpp
 )
 
 set(HEADERS
     src/mainwindow.h
     src/serialport.h
     src/protocol.h
+    src/configdialog.h
 )
 
 # ====== 可执行目标 ======

@@ -31,7 +31,6 @@ static void write_data(uint8_t data) {
 static void spi_diagnostic() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\n=== RAW SPI DIAGNOSTIC ===");
 
   // Set up pins
   pinMode(PIN_BL, OUTPUT);
@@ -48,12 +47,10 @@ static void spi_diagnostic() {
   delay(50);
   digitalWrite(PIN_RST, HIGH);
   delay(120);
-  Serial.println("Reset done");
 
   // Init SPI: 10 MHz, mode 0
   SPI.begin(PIN_SCLK, -1, PIN_MOSI, -1);
   SPI.beginTransaction(SPISettings(10000000, MSBFIRST, SPI_MODE0));
-  Serial.println("SPI started: 10 MHz, mode 0");
 
   // --- ST7789 init sequence (same as TFT_eSPI) ---
   write_cmd(0x01);  // SWRESET
@@ -64,24 +61,20 @@ static void spi_diagnostic() {
 
   write_cmd(0x36);  // MADCTL
   write_data(0x00); // RGB, normal orientation
-  Serial.println("MADCTL set");
 
   write_cmd(0x3A);  // COLMOD
   write_data(0x55); // 16-bit color (RGB565)
-  Serial.println("COLMOD set");
 
   // RAMCTRL — controls byte order (same as TFT_eSPI uses)
   write_cmd(0xB6);
   write_data(0x0A);
   write_data(0x82);
-  Serial.println("RAMCTRL set");
 
   write_cmd(0x13);  // NORON (normal mode on)
   delay(10);
 
   write_cmd(0x29);  // DISPON
   delay(10);
-  Serial.println("Display ON");
 
   // --- Test A: RED (0xF8 0x00 = high byte first, standard) ---
   write_cmd(0x2A);  // CASET: col 0..239
@@ -100,7 +93,6 @@ static void spi_diagnostic() {
     SPI.transfer(0x00);  // low byte
   }
   digitalWrite(PIN_CS, HIGH);
-  Serial.println("Top half: RED (H-byte first)");
 
   delay(500);
 
@@ -120,10 +112,8 @@ static void spi_diagnostic() {
     SPI.transfer(0xF8);  // high byte
   }
   digitalWrite(PIN_CS, HIGH);
-  Serial.println("Bottom half: RED (L-byte first)");
 
   SPI.endTransaction();
-  Serial.println("=== DIAG DONE ===");
 }
 
 static void loop_idle() {

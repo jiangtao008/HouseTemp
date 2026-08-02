@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 
+#include "configdialog.h"
+
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTimer>
@@ -76,6 +78,11 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_protocol, &Protocol::rebootResult, this,
             [this]() {
                 appendLog("设备即将重启", "#ffb86c");
+            });
+
+    connect(m_protocol, &Protocol::bootReceived, this,
+            [this](const QString &gateway) {
+                appendLog(QString("设备已重启上线（%1）").arg(gateway), "#50fa7b");
             });
 
     connect(m_protocol, &Protocol::errorReceived, this,
@@ -349,23 +356,40 @@ void MainWindow::onQueryAllConfig()
 
 void MainWindow::onSetGatewayName()
 {
-    m_protocol->sendSet("gateway.name", "网关名称");
+    ConfigDialog dlg({"gateway.name"}, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    QJsonObject values = dlg.collectedValues();
+    if (values.isEmpty()) {
+        appendLog("未填写网关名称，未修改", "#6272a4");
+        return;
+    }
+    m_protocol->sendSet("gateway.name", values["gateway.name"]);
 }
 
 void MainWindow::onSetWiFi()
 {
-    QJsonObject values;
-    values["wifi.ssid"]     = "WiFi名称";
-    values["wifi.password"] = "WiFi密码";
+    ConfigDialog dlg({"wifi.ssid", "wifi.password"}, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    QJsonObject values = dlg.collectedValues();
+    if (values.isEmpty()) {
+        appendLog("未填写任何 WiFi 参数，未修改", "#6272a4");
+        return;
+    }
     m_protocol->sendSetBatch(values);
 }
 
 void MainWindow::onSetMQTT()
 {
-    QJsonObject values;
-    values["mqtt.host"]     = "服务器地址";
-    values["mqtt.port"]     = 1883;
-    values["mqtt.username"] = "用户名(可选)";
+    ConfigDialog dlg({"mqtt.host", "mqtt.port", "mqtt.username", "mqtt.password"}, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    QJsonObject values = dlg.collectedValues();
+    if (values.isEmpty()) {
+        appendLog("未填写任何 MQTT 参数，未修改", "#6272a4");
+        return;
+    }
     m_protocol->sendSetBatch(values);
 }
 

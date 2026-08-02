@@ -16,6 +16,7 @@
 - 换行兼容：接收端应兼容 `\n` 和 `\r\n`
 - 单条消息最大长度：建议 `512 bytes`
 - 请求和响应均使用 `id` 关联
+- **必定响应**：固件对任何接收到的完整数据都返回一条 JSON，包括解析失败、字段缺失、空行等情况。若一行数据未以 `\n` 结尾且串口静默超过 `200 ms`，固件会将其视为一条完整（很可能非法）消息处理并给出响应，避免上位机无响应挂起。因此上位机可以不依赖 `\n` 也收到错误响应，但正确做法仍是每条请求以 `\n` 结尾。
 
 串口数据示例：
 
@@ -47,7 +48,7 @@
 成功响应：
 
 ```json
-{"v":1,"id":1,"ok":true,"param":"gateway.name","value":"gw-01"}
+{"v":1,"id":1,"cmd":"get","ok":true,"param":"gateway.name","value":"gw-01"}
 ```
 
 ### 4.2 读取全部参数
@@ -64,6 +65,7 @@
 {
   "v":1,
   "id":2,
+  "cmd":"get",
   "ok":true,
   "values":{
     "gateway.name":"gw-01",
@@ -99,6 +101,7 @@
 {
   "v":1,
   "id":3,
+  "cmd":"set",
   "ok":true,
   "param":"mqtt.host",
   "changed":true,
@@ -136,6 +139,7 @@
 {
   "v":1,
   "id":4,
+  "cmd":"set_batch",
   "ok":true,
   "changed":5,
   "persisted":true,
@@ -176,7 +180,7 @@
 成功响应：
 
 ```json
-{"v":1,"id":5,"ok":true,"action":"rebooting"}
+{"v":1,"id":5,"cmd":"reboot","ok":true,"action":"rebooting"}
 ```
 
 设备发送响应并刷新串口缓冲区后，延迟约 `100 ms`，调用：
@@ -184,6 +188,18 @@
 ```cpp
 ESP.restart();
 ```
+
+### 4.6 设备上线事件（固件主动上报）
+
+网关每次上电/重启完成后，会主动向串口发送一条上线消息，用于上位机确认设备已回到在线状态：
+
+```json
+{"v":1,"event":"boot","ok":true,"gateway":"gw-01"}
+```
+
+- 该消息没有 `id` 和 `cmd`，上位机不应将其视为某次请求的响应。
+- `gateway` 为当前网关名称（`gateway.name`）。
+- 典型流程：上位机发送 `reboot` → 收到 `cmd:"reboot"` 确认回复 → 网关重启 → 收到 `event:"boot"` 上线消息。
 
 ## 5. 参数定义
 

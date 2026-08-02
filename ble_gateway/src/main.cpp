@@ -81,6 +81,9 @@ void setup() {
 
   config_load();
 
+  // Let the host know the gateway is up (confirms a serial "reboot" completed).
+  serial_config_notify_boot();
+
   display_init();
 
   // Show gateway name on screen
@@ -94,9 +97,6 @@ void setup() {
   mqtt_connect();
 
   // Refresh again now that WiFi and MQTT status are known
-  Serial.printf("[Status] WiFi: %s, MQTT: %s\n",
-                wifi_is_connected() ? "Connected" : "Offline",
-                mqtt_is_connected() ? "Connected" : "Offline");
   display_set_gateway_status(wifi_is_connected(), mqtt_is_connected());
   display_set_gateway_network(wifi_ip_string(), wifi_signal_rssi());
   display_update();

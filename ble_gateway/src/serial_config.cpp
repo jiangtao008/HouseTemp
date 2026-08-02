@@ -11,10 +11,15 @@ namespace {
 
 constexpr size_t kLineMaxLength = 512;
 constexpr size_t kDocumentCapacity = 1536;
+// If a line is received without its trailing '\n' (e.g. the host forgot the
+// newline), finalize it after this silent gap so a response is always produced
+// instead of buffering forever.
+constexpr uint32_t kLineIdleTimeoutMs = 200;
 
 char line_buffer[kLineMaxLength + 1] = {};
 size_t line_length = 0;
 bool line_overflow = false;
+uint32_t last_rx_ms = 0;
 
 void send_response(JsonDocument &document) {
   serializeJson(document, Serial);
@@ -183,23 +188,27 @@ bool parameter_changed(const char *param, const GatewayConfig &before,
   return false;
 }
 
-bool write_parameter(JsonVariant target, const char *param, const GatewayConfig &config) {
+// ArduinoJson 7 note: object[key] returns a MemberProxy. Converting it to a
+// JsonVariant and calling set() on the copy silently writes nothing when the
+// key does not exist yet (the read-path JsonVariant is unbound). Always write
+// through target[param] instead, so the member is created and assigned.
+bool write_parameter(JsonObject target, const char *param, const GatewayConfig &config) {
   if (strcmp(param, "gateway.name") == 0) {
-    target.set(config.gateway_name);
+    target[param] = config.gateway_name;
   } else if (strcmp(param, "wifi.ssid") == 0) {
-    target.set(config.wifi_ssid);
+    target[param] = config.wifi_ssid;
   } else if (strcmp(param, "wifi.password") == 0) {
-    target.set("******");
+    target[param] = "******";
   } else if (strcmp(param, "mqtt.host") == 0) {
-    target.set(config.mqtt_host);
+    target[param] = config.mqtt_host;
   } else if (strcmp(param, "mqtt.port") == 0) {
-    target.set(config.mqtt_port);
+    target[param] = config.mqtt_port;
   } else if (strcmp(param, "mqtt.username") == 0) {
-    target.set(config.mqtt_username);
+    target[param] = config.mqtt_username;
   } else if (strcmp(param, "mqtt.password") == 0) {
-    target.set("******");
+    target[param] = "******";
   } else if (strcmp(param, "security.auth_key") == 0) {
-    target.set("******");
+    target[param] = "******";
   } else {
     return false;
   }
@@ -207,14 +216,14 @@ bool write_parameter(JsonVariant target, const char *param, const GatewayConfig 
 }
 
 void add_all_parameters(JsonObject values, const GatewayConfig &config) {
-  write_parameter(values["gateway.name"], "gateway.name", config);
-  write_parameter(values["wifi.ssid"], "wifi.ssid", config);
-  write_parameter(values["wifi.password"], "wifi.password", config);
-  write_parameter(values["mqtt.host"], "mqtt.host", config);
-  write_parameter(values["mqtt.port"], "mqtt.port", config);
-  write_parameter(values["mqtt.username"], "mqtt.username", config);
-  write_parameter(values["mqtt.password"], "mqtt.password", config);
-  write_parameter(values["security.auth_key"], "security.auth_key", config);
+  write_parameter(values, "gateway.name", config);
+  write_parameter(values, "wifi.ssid", config);
+  write_parameter(values, "wifi.password", config);
+  write_parameter(values, "mqtt.host", config);
+  write_parameter(values, "mqtt.port", config);
+  write_parameter(values, "mqtt.username", config);
+  write_parameter(values, "mqtt.password", config);
+  write_parameter(values, "security.auth_key", config);
 }
 
 void process_request(const char *line) {
@@ -257,16 +266,22 @@ void process_request(const char *line) {
     StaticJsonDocument<kDocumentCapacity> response;
     response["v"] = PROTOCOL_VERSION;
     response["id"] = id;
+    response["cmd"] = "get";
     response["ok"] = true;
     if (strcmp(param, "*") == 0) {
       JsonObject values = response["values"].to<JsonObject>();
       add_all_parameters(values, gateway_config);
     } else {
       response["param"] = param;
-      if (!write_parameter(response["value"], param, gateway_config)) {
+      // Write into a scratch object first (see write_parameter note), then copy
+      // the value out under the protocol's top-level "value" key.
+      StaticJsonDocument<256> value_doc;
+      JsonObject value_obj = value_doc.to<JsonObject>();
+      if (!write_parameter(value_obj, param, gateway_config)) {
         send_error(id, true, "UNKNOWN_PARAMETER", "unknown parameter", param);
         return;
       }
+      response["value"] = value_obj[param];
     }
     send_response(response);
     return;
@@ -295,6 +310,7 @@ void process_request(const char *line) {
     StaticJsonDocument<512> response;
     response["v"] = PROTOCOL_VERSION;
     response["id"] = id;
+    response["cmd"] = "set";
     response["ok"] = true;
     response["param"] = param;
     response["changed"] = changed;
@@ -337,6 +353,7 @@ void process_request(const char *line) {
     StaticJsonDocument<512> response;
     response["v"] = PROTOCOL_VERSION;
     response["id"] = id;
+    response["cmd"] = "set_batch";
     response["ok"] = true;
     response["changed"] = changed;
     response["persisted"] = true;
@@ -349,6 +366,7 @@ void process_request(const char *line) {
     StaticJsonDocument<256> response;
     response["v"] = PROTOCOL_VERSION;
     response["id"] = id;
+    response["cmd"] = "reboot";
     response["ok"] = true;
     response["action"] = "rebooting";
     send_response(response);
@@ -361,20 +379,43 @@ void process_request(const char *line) {
   send_error(id, has_id, "UNKNOWN_COMMAND", "unknown command");
 }
 
+// Finalize the buffered line and always send a response, whatever the state:
+// overflow → "exceeds maximum length"; non-empty → process (its parse errors
+// already produce their own error reply); empty → explicit "empty request".
+void finalize_line() {
+  if (line_overflow) {
+    send_error(0, false, "BAD_JSON", "request exceeds maximum length");
+  } else if (line_length > 0) {
+    line_buffer[line_length] = '\0';
+    process_request(line_buffer);
+  } else {
+    send_error(0, false, "BAD_JSON", "empty request");
+  }
+  line_length = 0;
+  line_overflow = false;
+}
+
 }  // namespace
+
+// Called once after boot (and after every reboot). Gives the host a positive
+// signal that the gateway is back online, since the command/response exchange
+// is otherwise interrupted by the restart.
+void serial_config_notify_boot() {
+  StaticJsonDocument<128> document;
+  document["v"] = PROTOCOL_VERSION;
+  document["event"] = "boot";
+  document["ok"] = true;
+  document["gateway"] = gateway_config.gateway_name;
+  send_response(document);
+  Serial.flush();
+}
 
 void serial_config_update() {
   while (Serial.available() > 0) {
     const char character = static_cast<char>(Serial.read());
+    last_rx_ms = millis();
     if (character == '\n') {
-      if (line_overflow) {
-        send_error(0, false, "BAD_JSON", "request exceeds maximum length");
-      } else if (line_length > 0) {
-        line_buffer[line_length] = '\0';
-        process_request(line_buffer);
-      }
-      line_length = 0;
-      line_overflow = false;
+      finalize_line();
       continue;
     }
     if (character == '\r') {
@@ -388,5 +429,12 @@ void serial_config_update() {
       continue;
     }
     line_buffer[line_length++] = character;
+  }
+
+  // The line was never terminated with '\n' and the bus has been quiet long
+  // enough — treat the buffered data as one complete (likely malformed) line
+  // so the client always gets a reply instead of hanging.
+  if (line_length > 0 && (millis() - last_rx_ms) >= kLineIdleTimeoutMs) {
+    finalize_line();
   }
 }

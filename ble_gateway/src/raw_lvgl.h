@@ -86,8 +86,6 @@ static void display_hw_init() {
   spi_cmd(0x2B); spi_data(0x00); spi_data(0x00); spi_data(0x01); spi_data(0x3F);
 
   SPI.endTransaction();
-
-  Serial.println("Display HW init done (raw SPI)");
 }
 
 // ── LVGL flush callback ────────────────────────────────────────────────
@@ -95,8 +93,6 @@ static void disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
                         lv_color_t *color_p) {
   uint32_t w = area->x2 - area->x1 + 1;
   uint32_t h = area->y2 - area->y1 + 1;
-
-  Serial.printf("[FLUSH] %u×%u @(%u,%u)\n", w, h, area->x1, area->y1);
 
   // Each lv_color_t is RGB565 in little-endian.  We send it high-byte-first
   // via SPI (which is MSB-first), so we write the bytes as-is from the
@@ -129,7 +125,6 @@ static void disp_flush(lv_disp_drv_t *disp, const lv_area_t *area,
 void raw_lvgl_main() {
   Serial.begin(115200);
   delay(500);
-  Serial.println("\n=== RAW SPI + LVGL TEST ===");
 
   // Direct fill test (raw SPI, no TFT_eSPI)
   display_hw_init();
@@ -152,7 +147,6 @@ void raw_lvgl_main() {
   }
   digitalWrite(PIN_CS, HIGH);
   SPI.endTransaction();
-  Serial.println("Full screen RED — seeing this?");
   delay(2000);
 
   // Fill screen GREEN
@@ -173,11 +167,9 @@ void raw_lvgl_main() {
   }
   digitalWrite(PIN_CS, HIGH);
   SPI.endTransaction();
-  Serial.println("Full screen GREEN");
   delay(2000);
 
   // ── LVGL ──────────────────────────────────────────────────────────
-  Serial.println("LVGL init …");
   lv_init();
 
   lv_disp_draw_buf_init(&disp_buf, buf, NULL, 240 * 40);
@@ -206,8 +198,6 @@ void raw_lvgl_main() {
   lv_obj_invalidate(lv_scr_act());
   lv_timer_handler();
   SPI.endTransaction();
-
-  Serial.println("=== DONE ===");
 }
 
 void raw_lvgl_loop() {

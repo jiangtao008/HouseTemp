@@ -9,26 +9,14 @@ bool wifi_connect() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(gateway_config.wifi_ssid, gateway_config.wifi_password);
 
-  Serial.printf("[WiFi] Connecting to \"%s\" ...\n",
-                gateway_config.wifi_ssid);
-
   for (int i = 0; i < 30; ++i) {
     if (WiFi.status() == WL_CONNECTED) {
-      Serial.printf("[WiFi] Connected! IP: %s, RSSI: %d dBm\n",
-                    WiFi.localIP().toString().c_str(), WiFi.RSSI());
       return true;
     }
     delay(500);
   }
 
-  const bool connected = WiFi.status() == WL_CONNECTED;
-  if (connected) {
-    Serial.printf("[WiFi] Connected! IP: %s, RSSI: %d dBm\n",
-                  WiFi.localIP().toString().c_str(), WiFi.RSSI());
-  } else {
-    Serial.printf("[WiFi] Failed to connect (status=%d)\n", WiFi.status());
-  }
-  return connected;
+  return WiFi.status() == WL_CONNECTED;
 }
 
 bool wifi_is_connected() {

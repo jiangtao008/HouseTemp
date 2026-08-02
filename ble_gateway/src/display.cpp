@@ -175,6 +175,63 @@ static void raw_fill(uint16_t color565) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
+//  Raw SPI: fill a screen sub-region with a solid RGB565 color
+// ══════════════════════════════════════════════════════════════════════
+static void raw_fill_region(uint16_t color565, uint16_t x1, uint16_t y1,
+                            uint16_t x2, uint16_t y2) {
+    const uint32_t w = x2 - x1 + 1;
+    const uint32_t h = y2 - y1 + 1;
+
+    SPI.beginTransaction(SPISettings(20000000, MSBFIRST, SPI_MODE0));
+    spi_cmd(0x2A);
+    spi_data(x1 >> 8); spi_data(x1 & 0xFF);
+    spi_data(x2 >> 8); spi_data(x2 & 0xFF);
+    spi_cmd(0x2B);
+    spi_data(y1 >> 8); spi_data(y1 & 0xFF);
+    spi_data(y2 >> 8); spi_data(y2 & 0xFF);
+    spi_cmd(0x2C);  // RAMWR
+
+    digitalWrite(PIN_DC, HIGH);
+    digitalWrite(PIN_CS, LOW);
+    for (uint32_t i = 0; i < w * h; i++) {
+        SPI.transfer(color565 >> 8);
+        SPI.transfer(color565 & 0xFF);
+    }
+    digitalWrite(PIN_CS, HIGH);
+    SPI.endTransaction();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+//  Boot sweep animation
+//  Plays on every power-on / reboot before the UI is built, so a restart
+//  (e.g. after the serial "reboot" command) is visibly confirmed on screen.
+//  Only newly-covered rows are painted each frame (curtain sweep).
+// ══════════════════════════════════════════════════════════════════════
+static void boot_sweep_animation() {
+    const uint16_t kStep = 8;         // rows painted per frame
+    const uint32_t kFrameMs = 5;      // pause per frame
+
+    // Sweep down: cyan front edge fills from top to bottom
+    for (uint16_t y = 0; y < DISP_H; y += kStep) {
+        uint16_t y2 = y + kStep - 1;
+        if (y2 >= DISP_H) y2 = DISP_H - 1;
+        raw_fill_region(0x07FF, 0, y, DISP_W - 1, y2);  // cyan
+        delay(kFrameMs);
+    }
+    // Sweep up: magenta front edge fills from bottom to top
+    for (uint16_t y = DISP_H; y > 0; ) {
+        const uint16_t y1 = y - kStep;
+        raw_fill_region(0xF81F, 0, y1, DISP_W - 1, y - 1);  // magenta
+        y = y1;
+        delay(kFrameMs);
+    }
+    // Blink white to confirm, then back to black
+    raw_fill(0xFFFF);
+    delay(80);
+    raw_fill(0x0000);
+}
+
+// ══════════════════════════════════════════════════════════════════════
 //  Create a label
 // ══════════════════════════════════════════════════════════════════════
 static lv_obj_t *make_label(lv_obj_t *parent, const char *text,
@@ -366,8 +423,10 @@ bool display_init() {
     // ── Backlight ON ───────────────────────────────────────────────
     digitalWrite(PIN_BL, HIGH);
 
-    // ── Fill black (no diagnostic flash in production) ────────────
-    raw_fill(0x0000);
+    // ── Boot sweep animation ──────────────────────────────────────
+    // Every power-on / reboot plays a visible sweep so the restart
+    // (e.g. serial "reboot" command) is confirmed on screen.
+    boot_sweep_animation();
 
     // ── LVGL core ─────────────────────────────────────────────────
     lv_init();
@@ -431,9 +490,6 @@ void display_set_gateway_status(bool wifi, bool mqtt) {
     if (!display_ready) return;
 
     // Always refresh, not just on change — LVGL dirty-area may not trigger flush
-    Serial.printf("[Display] Status: wifi=%d->%d, mqtt=%d->%d, ptr=%p\n",
-                  wifi_ok, wifi, mqtt_ok, mqtt, gw_wifi_label);
-
     wifi_ok = wifi;
     mqtt_ok = mqtt;
 
