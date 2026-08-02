@@ -1,0 +1,32 @@
+# 全屋温湿度监控服务端 systemd 单元（Node 版）
+#
+# 安装：
+#   sudo cp deploy/thermo-service.service /etc/systemd/system/
+#   sudo mkdir -p /srv/thermo-service          # 将 service/ 内容拷贝至此
+#   cd /srv/thermo-service && npm install --omit=dev
+#   sudo useradd -r -M -d /srv/thermo-service thermo
+#   sudo chown -R thermo:thermo /srv/thermo-service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now thermo-service
+#
+# 查看日志：journalctl -u thermo-service -f
+
+[Unit]
+Description=Thermo monitoring service (MQTT -> SQLite + Express + Vue SPA)
+After=network-online.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=thermo
+Group=thermo
+WorkingDirectory=/srv/thermo-service
+Environment=NODE_ENV=production
+# 若 broker 地址在局域网内，可加私网 DNS 依赖：
+# Requires=network-online.target
+ExecStart=/usr/bin/node /srv/thermo-service/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

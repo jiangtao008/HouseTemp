@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>全屋温湿度监控</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部 Tab -->
+    <header class="tabbar">
+      <button class="tab" :class="{ active: tab === 'main' }" @click="switchTab('main')">主页面</button>
+      <button class="tab" :class="{ active: tab === 'subs' }" @click="switchTab('subs')">订阅页面</button>
+      <div class="tabbar-spacer"></div>
+      <button class="btn btn-lock" :class="{ locked: settings.lock_all }" @click="toggleLock">
+        <span class="lock-icon">{{ settings.lock_all ? '🔒' : '🔓' }}</span>
+        {{ settings.lock_all ? '已锁定' : '锁定全部' }}
+      </button>
+    </header>
+
+    <!-- 主页面 -->
+    <main v-show="tab === 'main'" class="main-stage" :style="stageStyle">
+      <!-- 主页面工具栏 -->
+      <div class="stage-toolbar">
+        <button class="btn" @click="$refs.bgInput.click()">🖼 设置背景图</button>
+        <button v-if="settings.background" class="btn" @click="removeBackground">移除背景</button>
+        <span class="stage-hint">拖动面板可调整位置{{ settings.lock_all ? '（当前已锁定）' : '' }}</span>
+      </div>
+
+      <!-- 节点面板 -->
+      <div v-for="(node, i) in subscribedNodes" :key="node.device_id"
+           class="node-panel" :class="{ stale: node.stale }"
+           :style="panelStyle(node, i)"
+           @pointerdown="startDrag($event, node)"
+           @pointermove="onDrag($event, node)"
+           @pointerup="endDrag($event, node)"
+           @pointercancel="endDrag($event, node)">
+        <div class="node-name">{{ node.effective_name }}</div>
+        <div class="node-temp">{{ fmtTemp(node.temperature) }}</div>
+        <div class="node-row">💧 湿度 {{ node.humidity != null ? node.humidity + ' %' : '—' }}</div>
+        <div class="node-row">🔋 电池 {{ batteryText(node) }}</div>
+        <div class="node-row sub" v-if="node.rssi != null">信号 {{ node.rssi }} dBm</div>
+        <div v-if="node.stale" class="stale-badge">离线</div>
+      </div>
+
+      <div v-if="subscribedNodes.length === 0" class="empty-hint">
+        <p>暂无订阅的节点</p>
+        <p class="sub">请到「订阅页面」勾选需要显示的节点</p>
+      </div>
+
+      <!-- 隐藏的背景图上传 -->
+      <input type="file" ref="bgInput" accept="image/*" class="hidden-input"
+             @change="uploadBackground($event)">
+    </main>
+
+    <!-- 订阅页面 -->
+    <main v-show="tab === 'subs'" class="subs-page">
+      <div class="mqtt-banner" :class="status.mqtt_connected ? 'ok' : 'err'">
+        MQTT {{ status.mqtt_connected ? '已连接' : '未连接' }}
+        <span v-if="!status.mqtt_connected && status.mqtt_last_error" class="sub">（{{ status.mqtt_last_error }}）</span>
+        <span v-else-if="status.mqtt_connected" class="sub">· 节点数 {{ status.node_count }}</span>
+        <button class="btn btn-mini" @click="showMqttSettings = !showMqttSettings">
+          MQTT 设置 {{ showMqttSettings ? '▴' : '▾' }}
+        </button>
+      </div>
+
+      <!-- MQTT 服务设置 -->
+      <div v-show="showMqttSettings" class="mqtt-settings">
+        <div class="mqtt-grid">
+          <div class="mqtt-field">
+            <label>服务器地址</label>
+            <input v-model="mqttForm.host" placeholder="127.0.0.1">
+          </div>
+          <div class="mqtt-field">
+            <label>端口</label>
+            <input v-model.number="mqttForm.port" type="number" min="1" max="65535">
+          </div>
+          <div class="mqtt-field">
+            <label>用户名</label>
+            <input v-model="mqttForm.username" placeholder="可选，留空匿名">
+          </div>
+          <div class="mqtt-field">
+            <label>密码</label>
+            <input v-model="mqttForm.password" type="password"
+                   :placeholder="mqttForm.password_set ? '已设置，留空保持不变' : '可选，留空匿名'">
+          </div>
+        </div>
+        <div class="mqtt-actions">
+          <button class="btn primary" @click="saveMqtt" :disabled="mqttSaving">
+            {{ mqttSaving ? '保存中…' : '保存并重连' }}
+          </button>
+          <button v-if="mqttForm.password_set" class="btn" @click="clearMqttPassword">清除密码</button>
+          <span class="mqtt-tip">保存后自动按新地址重连；密码不回显，留空表示不修改。</span>
+        </div>
+      </div>
+
+      <div v-if="allNodes.length === 0" class="empty-hint">
+        <p>尚未发现任何节点</p>
+        <p class="sub">节点首次上报（约每 5 分钟）后会自动出现在这里</p>
+      </div>
+
+      <div class="node-list">
+        <div v-for="node in allNodes" :key="node.device_id" class="node-row-item">
+          <label class="check">
+            <input type="checkbox" :checked="node.subscribed" @change="setSubscribed(node, $event)">
+            <span class="checkmark"></span>
+          </label>
+          <div class="row-main">
+            <input class="name-input" :value="editableName(node)"
+                   placeholder="节点-"
+                   @change="renameNode(node, $event)">
+            <div class="row-sub">
+              <span class="mono">#{{ node.device_id }}</span>
+              <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '—' }}</span>
+              <span v-if="node.stale" class="warn"> · 离线</span>
+            </div>
+          </div>
+          <div class="row-time" :title="node.last_seen || ''">
+            {{ node.last_seen ? fmtSeen(node.last_seen) : '—' }}
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
