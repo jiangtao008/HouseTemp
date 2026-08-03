@@ -8,7 +8,7 @@ const DEFAULT_PATH = path.join(SERVICE_DIR, 'config.example.json');
 const CONFIG_PATH = path.join(SERVICE_DIR, 'config.json');
 
 const DEFAULTS = {
-  mqtt: { host: '127.0.0.1', port: 1883, username: '', password: '', topic: 'iot/device/+/sensor' },
+  mqtt: { host: '127.0.0.1', port: 1883, username: '', password: '', topics: [] },
   database: { path: 'data/thermo.db', retention_days: 30 },
   server: { host: '0.0.0.0', port: 8000 },
   storage: { upload_dir: 'public/uploads', max_upload_mb: 10 },

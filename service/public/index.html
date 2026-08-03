@@ -25,28 +25,32 @@
       <div class="stage-toolbar">
         <button class="btn" @click="$refs.bgInput.click()">🖼 设置背景图</button>
         <button v-if="settings.background" class="btn" @click="removeBackground">移除背景</button>
-        <span class="stage-hint">拖动面板可调整位置{{ settings.lock_all ? '（当前已锁定）' : '' }}</span>
+        <span class="stage-hint">拖动面板可调整位置，右下角手柄可调整大小{{ settings.lock_all ? '（当前已锁定）' : '' }}</span>
       </div>
 
-      <!-- 节点面板 -->
-      <div v-for="(node, i) in subscribedNodes" :key="node.device_id"
-           class="node-panel" :class="{ stale: node.stale }"
-           :style="panelStyle(node, i)"
-           @pointerdown="startDrag($event, node)"
-           @pointermove="onDrag($event, node)"
-           @pointerup="endDrag($event, node)"
-           @pointercancel="endDrag($event, node)">
-        <div class="node-name">{{ node.effective_name }}</div>
-        <div class="node-temp">{{ fmtTemp(node.temperature) }}</div>
-        <div class="node-row">💧 湿度 {{ node.humidity != null ? node.humidity + ' %' : '—' }}</div>
-        <div class="node-row">🔋 电池 {{ batteryText(node) }}</div>
-        <div class="node-row sub" v-if="node.rssi != null">信号 {{ node.rssi }} dBm</div>
-        <div v-if="node.stale" class="stale-badge">离线</div>
+      <!-- 节点面板（与订阅主题一一对应） -->
+      <div v-for="(panel, i) in panels" :key="panel.id"
+           class="node-panel" :class="{ stale: panel.stale }"
+           :style="panelStyle(panel, i)"
+           @pointerdown="startDrag($event, panel)"
+           @pointermove="onDrag($event, panel)"
+           @pointerup="endDrag($event, panel)"
+           @pointercancel="endDrag($event, panel)">
+        <div class="node-name">{{ panel.name || panel.topic }}</div>
+        <template v-if="panel.type === 'thermo'">
+          <div class="node-temp">{{ fmtTemp(panel.temperature) }}</div>
+          <div class="node-row">💧 湿度 {{ panel.humidity != null ? panel.humidity + ' %' : '--' }}</div>
+          <div class="node-row">🔋 电池 {{ batteryText(panel) }}</div>
+          <div class="node-row sub" v-if="panel.rssi != null">信号 {{ panel.rssi }} dBm</div>
+        </template>
+        <div v-else class="node-row sub">该面板类型待支持（{{ panel.type }}）</div>
+        <div v-if="panel.stale" class="stale-badge">离线</div>
+        <div v-if="!settings.lock_all" class="resize-handle" title="拖动调整大小"></div>
       </div>
 
-      <div v-if="subscribedNodes.length === 0" class="empty-hint">
-        <p>暂无订阅的节点</p>
-        <p class="sub">请到「订阅页面」勾选需要显示的节点</p>
+      <div v-if="panels.length === 0" class="empty-hint">
+        <p>暂无配置的面板</p>
+        <p class="sub">请到「订阅页面」为订阅主题配置节点名字与类型</p>
       </div>
 
       <!-- 隐藏的背景图上传 -->
@@ -56,70 +60,160 @@
 
     <!-- 订阅页面 -->
     <main v-show="tab === 'subs'" class="subs-page">
-      <div class="mqtt-banner" :class="status.mqtt_connected ? 'ok' : 'err'">
-        MQTT {{ status.mqtt_connected ? '已连接' : '未连接' }}
-        <span v-if="!status.mqtt_connected && status.mqtt_last_error" class="sub">（{{ status.mqtt_last_error }}）</span>
-        <span v-else-if="status.mqtt_connected" class="sub">· 节点数 {{ status.node_count }}</span>
-        <button class="btn btn-mini" @click="showMqttSettings = !showMqttSettings">
-          MQTT 设置 {{ showMqttSettings ? '▴' : '▾' }}
+      <!-- 添加服务器（与各连接卡片同级别） -->
+      <div class="mqtt-add-row">
+        <button class="btn" @click="addMqttConn" :disabled="addingConn">
+          {{ addingConn ? '添加中…' : '＋ 添加服务器' }}
         </button>
       </div>
 
-      <!-- MQTT 服务设置 -->
-      <div v-show="showMqttSettings" class="mqtt-settings">
-        <div class="mqtt-grid">
-          <div class="mqtt-field">
-            <label>服务器地址</label>
-            <input v-model="mqttForm.host" placeholder="127.0.0.1">
-          </div>
-          <div class="mqtt-field">
-            <label>端口</label>
-            <input v-model.number="mqttForm.port" type="number" min="1" max="65535">
-          </div>
-          <div class="mqtt-field">
-            <label>用户名</label>
-            <input v-model="mqttForm.username" placeholder="可选，留空匿名">
-          </div>
-          <div class="mqtt-field">
-            <label>密码</label>
-            <input v-model="mqttForm.password" type="password"
-                   :placeholder="mqttForm.password_set ? '已设置，留空保持不变' : '可选，留空匿名'">
-          </div>
+      <!-- 平铺的 MQTT 连接卡片：每张 = 服务器配置 + 该连接上报的节点 -->
+      <div class="mqtt-conns">
+        <div v-if="mqttConns.length === 0" class="empty-hint subs-empty">
+          <p>尚无 MQTT 连接</p>
+          <p class="sub">点击上方「＋ 添加服务器」创建第一条连接</p>
         </div>
-        <div class="mqtt-actions">
-          <button class="btn primary" @click="saveMqtt" :disabled="mqttSaving">
-            {{ mqttSaving ? '保存中…' : '保存并重连' }}
-          </button>
-          <button v-if="mqttForm.password_set" class="btn" @click="clearMqttPassword">清除密码</button>
-          <span class="mqtt-tip">保存后自动按新地址重连；密码不回显，留空表示不修改。</span>
-        </div>
-      </div>
+        <div v-for="conn in mqttConns" :key="conn.id" class="mqtt-conn-card">
+          <!-- 头部：服务器名称 · 连接状态 · 节点数 -->
+          <div class="mqtt-conn-head">
+            <label class="check" :title="conn.enabled ? '已启用' : '已停用'">
+              <input type="checkbox" v-model="conn.enabled" @change="toggleConnEnabled(conn)">
+              <span class="checkmark"></span>
+            </label>
+            <input class="mqtt-conn-name" v-model="conn.name" placeholder="服务器名称">
+            <span class="conn-badge" :class="conn.connected ? 'ok' : 'err'">
+              {{ conn.connected ? '已连接' : '未连接' }}
+            </span>
+            <span class="conn-count">节点数 {{ nodesForConn(conn.id).length }}</span>
+            <span v-if="!conn.connected && conn.last_error" class="conn-err" :title="conn.last_error">
+              {{ conn.last_error }}
+            </span>
+            <button class="btn btn-mini conn-cfg" @click="conn.showConfig = !conn.showConfig">
+              配置 {{ conn.showConfig ? '▴' : '▾' }}
+            </button>
+            <button class="btn btn-mini conn-del" @click="removeMqttConn(conn)">删除</button>
+          </div>
 
-      <div v-if="allNodes.length === 0" class="empty-hint">
-        <p>尚未发现任何节点</p>
-        <p class="sub">节点首次上报（约每 5 分钟）后会自动出现在这里</p>
-      </div>
-
-      <div class="node-list">
-        <div v-for="node in allNodes" :key="node.device_id" class="node-row-item">
-          <label class="check">
-            <input type="checkbox" :checked="node.subscribed" @change="setSubscribed(node, $event)">
-            <span class="checkmark"></span>
-          </label>
-          <div class="row-main">
-            <input class="name-input" :value="editableName(node)"
-                   placeholder="节点-"
-                   @change="renameNode(node, $event)">
-            <div class="row-sub">
-              <span class="mono">#{{ node.device_id }}</span>
-              <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '—' }}</span>
-              <span v-if="node.stale" class="warn"> · 离线</span>
+          <!-- 服务器配置（可折叠） -->
+          <div v-show="conn.showConfig" class="conn-config">
+            <div class="mqtt-grid">
+              <div class="mqtt-field">
+                <label>服务器地址</label>
+                <input v-model="conn.host" placeholder="127.0.0.1">
+              </div>
+              <div class="mqtt-field">
+                <label>端口</label>
+                <input v-model.number="conn.port" type="number" min="1" max="65535">
+              </div>
+              <div class="mqtt-field">
+                <label>用户名</label>
+                <input v-model="conn.username" placeholder="可选，留空匿名">
+              </div>
+              <div class="mqtt-field">
+                <label>密码</label>
+                <input v-model="conn.password" type="password"
+                       :placeholder="conn.password_set ? '已设置，留空保持不变' : '可选，留空匿名'">
+              </div>
+              <div class="mqtt-field mqtt-topics">
+                <label>订阅主题（Topic）</label>
+                <div class="topic-list">
+                  <div v-if="conn.topics.length === 0" class="topic-empty">尚未添加主题，支持 +/# 通配符</div>
+                  <div v-for="(t, i) in conn.topics" :key="i" class="topic-row">
+                    <input class="topic-label" v-model="t.name" placeholder="节点名字" title="节点名字">
+                    <select class="topic-type" v-model="t.type" title="主题类型">
+                      <option value="thermo">温湿度</option>
+                      <option value="switch">开关（待支持）</option>
+                    </select>
+                    <span class="mono topic-name" :title="t.topic">{{ t.topic }}</span>
+                    <button class="topic-del" type="button" title="删除该主题" @click="removeConnTopic(conn, i)">✕</button>
+                  </div>
+                </div>
+                <div class="topic-add">
+                  <input v-model="conn.newTopicName" placeholder="节点名字">
+                  <select class="topic-type" v-model="conn.newTopicType">
+                    <option value="thermo">温湿度</option>
+                    <option value="switch">开关（待支持）</option>
+                  </select>
+                  <input v-model="conn.newTopic" placeholder="如 gateway_1/node_5/temperature、+/+/temperature 或 #"
+                         @keyup.enter="addConnTopic(conn)">
+                  <button class="btn btn-mini" type="button" @click="addConnTopic(conn)" :disabled="!conn.newTopic.trim()">＋ 添加</button>
+                </div>
+              </div>
+            </div>
+            <div class="mqtt-actions">
+              <button class="btn primary" @click="saveMqttConn(conn)" :disabled="conn.saving">
+                {{ conn.saving ? '保存中…' : '保存并重连' }}
+              </button>
+              <button v-if="conn.password_set" class="btn" @click="clearMqttPassword(conn)">清除密码</button>
             </div>
           </div>
-          <div class="row-time" :title="node.last_seen || ''">
-            {{ node.last_seen ? fmtSeen(node.last_seen) : '—' }}
+
+          <!-- 该连接上报的节点 -->
+          <div class="conn-nodes">
+            <div class="conn-nodes-head">
+              <span class="conn-nodes-title">节点</span>
+              <span class="gw-count">{{ nodesForConn(conn.id).length }} 个</span>
+            </div>
+            <div v-if="nodesForConn(conn.id).length === 0" class="topic-empty">
+              该连接尚未上报任何节点，节点上报后会自动出现在这里
+            </div>
+            <div v-for="node in nodesForConn(conn.id)" :key="nodeKey(node)" class="node-row-item">
+              <div class="row-main">
+                <div class="node-name-text">{{ node.effective_name }}</div>
+                <div class="row-sub">
+                  <span class="mono">#{{ node.device_id }}</span>
+                  <span class="type-badge" v-if="node.device_type">{{ node.device_type }}</span>
+                  <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '--' }}</span>
+                  <span v-if="node.stale" class="warn"> · 离线</span>
+                </div>
+              </div>
+              <div class="row-time" :title="node.last_seen || ''">
+                {{ node.last_seen ? fmtSeen(node.last_seen) : '--' }}
+              </div>
+            </div>
           </div>
         </div>
+      </div>
+
+      <!-- 未关联到任何连接的节点（连接被删 / 旧数据迁移） -->
+      <div v-if="unassignedGroups.length > 0" class="unassigned-block">
+        <div class="gateway-header">
+          <span class="gw-id">未关联连接的节点</span>
+          <span class="gw-count">{{ unassignedNodes.length }} 个</span>
+        </div>
+        <div class="node-list">
+          <div v-for="group in unassignedGroups" :key="'u' + group.gateway_id" class="gateway-group">
+            <div class="gateway-header">
+              <span class="gw-id">gateway_{{ group.gateway_id }}</span>
+              <span class="gw-count">{{ group.nodes.length }} 个节点</span>
+            </div>
+            <div v-for="node in group.nodes" :key="nodeKey(node)" class="node-row-item">
+              <div class="row-main">
+                <div class="node-name-text">{{ node.effective_name }}</div>
+                <div class="row-sub">
+                  <span class="mono">#{{ node.device_id }}</span>
+                  <span class="type-badge" v-if="node.device_type">{{ node.device_type }}</span>
+                  <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '--' }}</span>
+                  <span v-if="node.stale" class="warn"> · 离线</span>
+                </div>
+              </div>
+              <div class="row-time" :title="node.last_seen || ''">
+                {{ node.last_seen ? fmtSeen(node.last_seen) : '--' }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="nodes.length === 0" class="empty-hint subs-empty">
+        <p>尚未发现任何节点</p>
+        <p class="sub">节点首次上报（约每 5 分钟）后会自动出现在对应连接下</p>
+      </div>
+
+      <div class="mqtt-tip">
+        每条连接独立启用/停用、独立主题列表，保存后自动重连该连接；密码不回显，留空表示不修改；
+        每个主题可配置节点名字与类型（主面板按主题一一对应显示，当前仅温湿度面板，其余类型待支持）；
+        主题支持 +/# 通配符，列表为空则不订阅任何主题。
       </div>
     </main>
   </div>

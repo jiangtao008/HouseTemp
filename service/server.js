@@ -10,6 +10,7 @@ const mqttClient = require('./mqtt');
 const nodesRouter = require('./routes/nodes');
 const telemetryRouter = require('./routes/telemetry');
 const layoutRouter = require('./routes/layout');
+const panelsRouter = require('./routes/panels');
 const settingsRouter = require('./routes/settings');
 const statusRouter = require('./routes/status');
 const mqttRouter = require('./routes/mqtt');
@@ -18,6 +19,11 @@ const cfg = config.load();
 
 // 初始化数据库
 db.init(cfg);
+
+// 为既有连接补齐主题面板（新库无连接时 no-op；幂等，只影响配置/布局，不影响已有数据）
+for (const conn of db.listMqttConnections()) {
+  db.syncTopicPanels(conn.id, conn.topics);
+}
 
 const app = express();
 app.locals.cfg = cfg;
@@ -29,6 +35,7 @@ app.use(express.json());
 app.use('/api/nodes', nodesRouter);
 app.use('/api/telemetry', telemetryRouter);
 app.use('/api/layout', layoutRouter);
+app.use('/api/panels', panelsRouter);
 app.use('/api/settings', settingsRouter.router);
 app.use('/api/status', statusRouter);
 app.use('/api/mqtt', mqttRouter);

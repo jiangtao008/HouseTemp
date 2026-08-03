@@ -122,8 +122,27 @@ bool copy_port_value(JsonVariantConst value, uint16_t &destination,
   return true;
 }
 
+bool copy_u32_value(JsonVariantConst value, uint32_t &destination, const char *&error_code) {
+  if (!value.is<long>() && !value.is<unsigned long>()) {
+    error_code = "INVALID_TYPE";
+    return false;
+  }
+
+  const unsigned long number = value.as<unsigned long>();
+  if (number > 99999999) {
+    error_code = "INVALID_VALUE";
+    return false;
+  }
+
+  destination = static_cast<uint32_t>(number);
+  return true;
+}
+
 bool apply_parameter(const char *param, JsonVariantConst value, GatewayConfig &config,
                      const char *&error_code) {
+  if (strcmp(param, "gateway.id") == 0) {
+    return copy_u32_value(value, config.gateway_id, error_code);
+  }
   if (strcmp(param, "gateway.name") == 0) {
     return copy_string_value(value, config.gateway_name, sizeof(config.gateway_name), 1,
                              GATEWAY_NAME_MAX_LEN, error_code);
@@ -161,6 +180,9 @@ bool apply_parameter(const char *param, JsonVariantConst value, GatewayConfig &c
 
 bool parameter_changed(const char *param, const GatewayConfig &before,
                        const GatewayConfig &after) {
+  if (strcmp(param, "gateway.id") == 0) {
+    return before.gateway_id != after.gateway_id;
+  }
   if (strcmp(param, "gateway.name") == 0) {
     return strcmp(before.gateway_name, after.gateway_name) != 0;
   }
@@ -193,7 +215,9 @@ bool parameter_changed(const char *param, const GatewayConfig &before,
 // key does not exist yet (the read-path JsonVariant is unbound). Always write
 // through target[param] instead, so the member is created and assigned.
 bool write_parameter(JsonObject target, const char *param, const GatewayConfig &config) {
-  if (strcmp(param, "gateway.name") == 0) {
+  if (strcmp(param, "gateway.id") == 0) {
+    target[param] = config.gateway_id;
+  } else if (strcmp(param, "gateway.name") == 0) {
     target[param] = config.gateway_name;
   } else if (strcmp(param, "wifi.ssid") == 0) {
     target[param] = config.wifi_ssid;
@@ -216,6 +240,7 @@ bool write_parameter(JsonObject target, const char *param, const GatewayConfig &
 }
 
 void add_all_parameters(JsonObject values, const GatewayConfig &config) {
+  write_parameter(values, "gateway.id", config);
   write_parameter(values, "gateway.name", config);
   write_parameter(values, "wifi.ssid", config);
   write_parameter(values, "wifi.password", config);
@@ -406,6 +431,7 @@ void serial_config_notify_boot() {
   document["event"] = "boot";
   document["ok"] = true;
   document["gateway"] = gateway_config.gateway_name;
+  document["gateway_id"] = gateway_config.gateway_id;
   send_response(document);
   Serial.flush();
 }

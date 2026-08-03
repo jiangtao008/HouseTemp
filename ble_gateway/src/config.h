@@ -3,6 +3,9 @@
 #include <Arduino.h>
 
 constexpr uint8_t PROTOCOL_VERSION = 1;
+// 当前节点均为温湿度采集类型，MQTT 主题末级统一为 kSensorType。
+// 后续接入其他类型节点时，再引入 per-node 设备类型来源（见 README 扩展点）。
+constexpr char kSensorType[] = "temperature";
 constexpr size_t GATEWAY_NAME_MAX_LEN = 32;
 constexpr size_t WIFI_SSID_MAX_LEN = 32;
 constexpr size_t WIFI_PASSWORD_MAX_LEN = 64;
@@ -13,6 +16,7 @@ constexpr size_t AUTH_KEY_BYTES = 16;
 constexpr size_t AUTH_KEY_HEX_LEN = AUTH_KEY_BYTES * 2;
 
 struct GatewayConfig {
+  uint32_t gateway_id;            // 网关 ID：用于 MQTT 主题 gateway_<id>/...（串口配置，0=未设置）
   char gateway_name[GATEWAY_NAME_MAX_LEN + 1];
   char wifi_ssid[WIFI_SSID_MAX_LEN + 1];
   char wifi_password[WIFI_PASSWORD_MAX_LEN + 1];

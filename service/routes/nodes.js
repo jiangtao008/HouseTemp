@@ -7,6 +7,7 @@ const router = express.Router();
 const STALE_AFTER_MS = 10 * 60 * 1000; // 超过 10 分钟未上报视为离线
 
 function nodeToJson(row) {
+  const gatewayId = row.gateway_id;
   const deviceId = row.device_id;
   const name = row.name || '';
   const display = row.display_name;
@@ -22,7 +23,10 @@ function nodeToJson(row) {
   }
 
   return {
+    gateway_id: gatewayId,
     device_id: deviceId,
+    connection_id: row.connection_id ?? null,
+    device_type: row.device_type || '',
     name,
     display_name: display,
     effective_name: effective,
@@ -38,20 +42,22 @@ function nodeToJson(row) {
 
 router.get('/', (req, res) => {
   const subscribedOnly = req.query.subscribed === 'true';
-  res.json(db.listNodes({ subscribedOnly }).map(nodeToJson));
+  const gatewayId = req.query.gateway !== undefined ? Number(req.query.gateway) : undefined;
+  res.json(db.listNodes({ subscribedOnly, gatewayId }).map(nodeToJson));
 });
 
-router.put('/:deviceId', (req, res) => {
+router.put('/:gatewayId/:deviceId', (req, res) => {
+  const gatewayId = Number(req.params.gatewayId);
   const deviceId = Number(req.params.deviceId);
-  const node = db.getNode(deviceId);
-  if (!node) return res.status(404).json({ detail: `节点 ${deviceId} 不存在` });
+  const node = db.getNode(gatewayId, deviceId);
+  if (!node) return res.status(404).json({ detail: `节点 ${gatewayId}/${deviceId} 不存在` });
 
   const body = req.body || {};
   let displayName;
   if (Object.prototype.hasOwnProperty.call(body, 'display_name')) displayName = body.display_name;
-  db.updateNode(deviceId, { subscribed: body.subscribed, displayName });
+  db.updateNode(gatewayId, deviceId, { subscribed: body.subscribed, displayName });
 
-  res.json(nodeToJson(db.getNode(deviceId)));
+  res.json(nodeToJson(db.getNode(gatewayId, deviceId)));
 });
 
 module.exports = router;

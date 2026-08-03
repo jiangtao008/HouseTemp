@@ -86,8 +86,11 @@ void setup() {
 
   display_init();
 
-  // Show gateway name on screen
-  display_set_gateway_name(gateway_config.gateway_name);
+  // Show gateway name + id on screen（id 即 MQTT 主题中的 gateway_<id>）
+  char gateway_label[64];
+  snprintf(gateway_label, sizeof(gateway_label), "%s #%lu",
+           gateway_config.gateway_name, (unsigned long)gateway_config.gateway_id);
+  display_set_gateway_name(gateway_label);
 
   // Refresh display before the potentially-long blocking operations
   // that follow, so the user sees the initial UI immediately.

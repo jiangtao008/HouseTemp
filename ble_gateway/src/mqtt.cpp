@@ -41,8 +41,10 @@ bool mqtt_publish_sensor(uint16_t device_id, float temperature, uint8_t humidity
     return false;
   }
 
-  char topic[64];
-  snprintf(topic, sizeof(topic), "iot/device/%u/sensor", device_id);
+  // 分级主题：gateway_<网关id>/node_<节点id>/<设备类型>
+  char topic[96];
+  snprintf(topic, sizeof(topic), "gateway_%lu/node_%u/%s",
+           (unsigned long)gateway_config.gateway_id, device_id, kSensorType);
 
   StaticJsonDocument<256> doc;
   doc["id"] = device_id;

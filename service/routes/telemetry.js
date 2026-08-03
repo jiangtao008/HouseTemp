@@ -4,15 +4,16 @@ const db = require('../db');
 
 const router = express.Router();
 
-router.get('/:deviceId', (req, res) => {
+router.get('/:gatewayId/:deviceId', (req, res) => {
+  const gatewayId = Number(req.params.gatewayId);
   const deviceId = Number(req.params.deviceId);
-  if (!db.getNode(deviceId)) {
-    return res.status(404).json({ detail: `节点 ${deviceId} 不存在` });
+  if (!db.getNode(gatewayId, deviceId)) {
+    return res.status(404).json({ detail: `节点 ${gatewayId}/${deviceId} 不存在` });
   }
   let limit = Number(req.query.limit) || 100;
   limit = Math.max(1, Math.min(1000, Math.trunc(limit)));
-  const points = db.listTelemetry(deviceId, limit);
-  res.json({ device_id: deviceId, count: points.length, points });
+  const points = db.listTelemetry(gatewayId, deviceId, limit);
+  res.json({ gateway_id: gatewayId, device_id: deviceId, count: points.length, points });
 });
 
 module.exports = router;

@@ -103,6 +103,31 @@ body {
   border-color: rgba(231, 76, 60, .7);
   box-shadow: 0 0 0 1px rgba(231,76,60,.4), 0 8px 24px rgba(0,0,0,.35);
 }
+/* 右下角拖拽调整大小的手柄（双线角标） */
+.node-panel .resize-handle {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 14px;
+  height: 14px;
+  cursor: nwse-resize;
+  opacity: .4;
+  transition: opacity .15s;
+  border-right: 2px solid #9db1f8;
+  border-bottom: 2px solid #9db1f8;
+  border-bottom-right-radius: 2px;
+}
+.node-panel .resize-handle::after {
+  content: "";
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid #9db1f8;
+  border-bottom: 2px solid #9db1f8;
+}
+.node-panel .resize-handle:hover { opacity: 1; }
 .node-name {
   font-size: 15px;
   font-weight: 600;
@@ -143,6 +168,12 @@ body {
 }
 .empty-hint p { font-size: 18px; }
 .empty-hint p.sub { font-size: 13px; opacity: .8; }
+/* 订阅页用的普通流内空态（覆盖主页面 .empty-hint 的绝对定位） */
+.empty-hint.subs-empty {
+  position: static;
+  inset: auto;
+  padding: 32px 0;
+}
 
 .hidden-input { display: none; }
 
@@ -153,17 +184,21 @@ body {
   padding: 16px;
   background: #17181f;
 }
-.mqtt-banner {
-  padding: 10px 14px;
-  border-radius: 10px;
-  margin-bottom: 14px;
-  font-size: 14px;
-}
-.mqtt-banner.ok { background: rgba(46, 160, 92, .18); color: #7ee2a8; }
-.mqtt-banner.err { background: rgba(231, 76, 60, .18); color: #ff9d8f; }
-.mqtt-banner .sub { font-size: 12px; opacity: .8; margin-left: 4px; }
-
 .node-list { display: flex; flex-direction: column; gap: 8px; }
+.gateway-group { display: flex; flex-direction: column; gap: 8px; }
+.gateway-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 4px;
+}
+.gateway-header .gw-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: #adb5bd;
+}
+.gateway-header .gw-count { font-size: 12px; color: #6b7080; }
 .node-row-item {
   display: flex;
   align-items: center;
@@ -172,6 +207,14 @@ body {
   background: #1f212b;
   border: 1px solid #2b2e3a;
   border-radius: 12px;
+}
+.type-badge {
+  margin-left: 6px;
+  padding: 1px 7px;
+  font-size: 11px;
+  color: #5c7cfa;
+  background: rgba(92, 124, 250, .12);
+  border-radius: 999px;
 }
 .row-main { flex: 1; min-width: 0; }
 .name-input {
@@ -186,6 +229,16 @@ body {
 }
 .name-input:focus { border-color: #3b5bdb; }
 .row-sub { margin-top: 4px; font-size: 12px; color: #8a90a2; }
+.gw-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: #8a90a2;
+  background: #262936;
+  border: 1px solid #33374a;
+  border-radius: 6px;
+  vertical-align: middle;
+}
 .row-sub .warn { color: #e67e22; }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .row-time {
@@ -241,13 +294,6 @@ body {
 }
 .btn-mini:hover { background: rgba(255, 255, 255, .2); }
 
-.mqtt-settings {
-  background: #1f212b;
-  border: 1px solid #2b2e3a;
-  border-radius: 12px;
-  padding: 14px;
-  margin-bottom: 14px;
-}
 .mqtt-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -265,6 +311,152 @@ body {
   outline: none;
 }
 .mqtt-field input:focus { border-color: #3b5bdb; }
+.mqtt-field.mqtt-topics { grid-column: 1 / -1; }   /* 主题列表独占一整行 */
+.topic-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: #262936;
+  border: 1px solid #33374a;
+  border-radius: 8px;
+  padding: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.topic-empty { font-size: 13px; color: #6b7080; padding: 4px 2px; }
+.topic-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: #1f212b;
+  border: 1px solid #2b2e3a;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.topic-label {
+  flex-shrink: 0;
+  width: 96px;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: #fff;
+  background: #262936;
+  border: 1px solid #33374a;
+  border-radius: 6px;
+  outline: none;
+}
+.topic-label:focus { border-color: #3b5bdb; }
+.topic-type {
+  flex-shrink: 0;
+  padding: 4px 6px;
+  font-size: 13px;
+  color: #fff;
+  background: #262936;
+  border: 1px solid #33374a;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+.topic-row .topic-name { flex: 1; min-width: 0; word-break: break-all; }
+.topic-del {
+  flex-shrink: 0;
+  color: #ff9d8f;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.topic-del:hover { background: rgba(231, 76, 60, .2); color: #fff; }
+.topic-add { display: flex; gap: 8px; }
+.topic-add input { flex: 1; min-width: 0; }
+.topic-add input:first-of-type { flex: none; width: 96px; }   /* 添加行的节点名字输入 */
+
+/* 节点信息列表（订阅页只读展示） */
+.node-name-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* 多 MQTT 连接卡片（平铺在订阅页） */
+.mqtt-add-row { display: flex; margin-bottom: 12px; }
+.mqtt-conns { display: flex; flex-direction: column; gap: 14px; }
+.mqtt-conn-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #1f212b;
+  border: 1px solid #2b2e3a;
+  border-radius: 12px;
+  padding: 14px;
+}
+/* 卡片内的节点区：与配置区用底色/边框区分 */
+.conn-nodes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #17181f;
+  border: 1px solid #2b2e3a;
+  border-radius: 10px;
+  padding: 10px;
+}
+.conn-nodes-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 2px 2px;
+}
+.conn-nodes-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #adb5bd;
+}
+.unassigned-block { margin-top: 14px; }
+.mqtt-conn-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mqtt-conn-name {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: #fff;
+  background: #262936;
+  border: 1px solid #33374a;
+  border-radius: 8px;
+  outline: none;
+}
+.mqtt-conn-name:focus { border-color: #3b5bdb; }
+.conn-badge {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.conn-badge.ok { background: rgba(46, 160, 92, .18); color: #7ee2a8; }
+.conn-badge.err { background: rgba(231, 76, 60, .18); color: #ff9d8f; }
+.conn-count {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(92, 124, 250, .14);
+  color: #9db1f8;
+  white-space: nowrap;
+}
+.conn-err {
+  font-size: 12px;
+  color: #ff9d8f;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conn-cfg { color: #9aa0b0; }
+.conn-cfg:hover { background: rgba(92, 124, 250, .18); color: #fff; }
+.conn-del { color: #ff9d8f; }
+.conn-del:hover { background: rgba(231, 76, 60, .2); }
 .mqtt-actions {
   display: flex;
   align-items: center;

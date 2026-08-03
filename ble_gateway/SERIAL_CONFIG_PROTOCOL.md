@@ -68,6 +68,7 @@
   "cmd":"get",
   "ok":true,
   "values":{
+    "gateway.id":1234,
     "gateway.name":"gw-01",
     "wifi.ssid":"HomeWiFi",
     "wifi.password":"******",
@@ -194,17 +195,19 @@ ESP.restart();
 网关每次上电/重启完成后，会主动向串口发送一条上线消息，用于上位机确认设备已回到在线状态：
 
 ```json
-{"v":1,"event":"boot","ok":true,"gateway":"gw-01"}
+{"v":1,"event":"boot","ok":true,"gateway":"gw-01","gateway_id":1234}
 ```
 
 - 该消息没有 `id` 和 `cmd`，上位机不应将其视为某次请求的响应。
 - `gateway` 为当前网关名称（`gateway.name`）。
+- `gateway_id` 为网关 ID（用于 MQTT 主题 `gateway_<id>/...`）。
 - 典型流程：上位机发送 `reboot` → 收到 `cmd:"reboot"` 确认回复 → 网关重启 → 收到 `event:"boot"` 上线消息。
 
 ## 5. 参数定义
 
 | 参数名 | 类型 | 约束 | 重启后生效 |
 | --- | --- | --- | --- |
+| `gateway.id` | uint32 | `0`～`99999999` | 是 |
 | `gateway.name` | string | 长度 `1`～`32` | 是 |
 | `wifi.ssid` | string | 长度 `1`～`32` | 是 |
 | `wifi.password` | string | 长度 `0`～`64` | 是 |

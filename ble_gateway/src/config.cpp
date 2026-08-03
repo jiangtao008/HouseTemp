@@ -29,6 +29,7 @@ GatewayConfig gateway_config = {};
 
 void config_set_defaults(GatewayConfig &config) {
   memset(&config, 0, sizeof(config));
+  config.gateway_id = 0;
   copy_string(config.gateway_name, sizeof(config.gateway_name), kDefaultGatewayName);
   copy_string(config.wifi_ssid, sizeof(config.wifi_ssid), kDefaultWifiSsid);
   copy_string(config.wifi_password, sizeof(config.wifi_password), kDefaultWifiPassword);
@@ -51,6 +52,7 @@ bool config_load() {
     return config_save(gateway_config);
   }
 
+  gateway_config.gateway_id = preferences.getUInt("gw_id", gateway_config.gateway_id);
   String value = preferences.getString("gw_name", gateway_config.gateway_name);
   copy_string(gateway_config.gateway_name, sizeof(gateway_config.gateway_name), value.c_str());
   value = preferences.getString("wifi_ssid", gateway_config.wifi_ssid);
