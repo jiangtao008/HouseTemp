@@ -6,12 +6,12 @@ html, body, #app { height: 100%; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
                "Microsoft YaHei", sans-serif;
-  background: #14151a;
+  background: #0d0e13;   /* 舞台外留白底色，略深于舞台以便区分 */
   color: #e8eaf0;
-  overflow: hidden;
+  overflow: auto;        /* 窗口小于 2560×1440 虚拟舞台时页面滚动，面板不压缩 */
 }
 
-#app { display: flex; flex-direction: column; }
+#app { display: flex; flex-direction: column; min-height: 100%; }
 
 /* ---------- 顶部 Tab ---------- */
 .tabbar {
@@ -56,7 +56,11 @@ body {
 /* ---------- 主页面 ---------- */
 .main-stage {
   position: relative;
-  flex: 1;
+  flex: none;            /* 不随窗口伸缩 */
+  width: 2560px;         /* 固定虚拟舞台尺寸（像素），与 app.js 的 STAGE_W/H 一致 */
+  height: 1440px;
+  flex-shrink: 0;
+  margin: auto;          /* 窗口比舞台大时居中留白，窗口更小时自动滚动 */
   overflow: hidden;
   background:
     radial-gradient(1200px 800px at 20% 0%, #20263a 0%, transparent 60%),

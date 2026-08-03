@@ -2,10 +2,13 @@
 const { createApp } = Vue;
 
 const POLL_INTERVAL = 10000;      // 数据刷新周期（节点 5 分钟一报，10s 足够）
-const SAVE_DEBOUNCE = 400;        // 拖拽保存防抖（毫秒）
 const GRID = 5;                   // 布局吸附网格（像素）：位置 xy 与大小 wh 都对齐到网格
 const MIN_W = 120;                // 面板最小宽度（像素，与 CSS min-width 一致）
 const MIN_H = 90;                 // 面板最小高度（像素，与 CSS min-height 一致）
+// 主页面虚拟舞台尺寸（像素）：面板位置/大小以此为固定坐标系，与浏览器窗口大小无关。
+// 注意：服务端 service/db.js 的 STAGE_W/STAGE_H 需与此保持一致。
+const STAGE_W = 2560;
+const STAGE_H = 1440;
 
 function clamp(v, lo, hi) {
   return Math.min(Math.max(v, lo), hi);
@@ -14,9 +17,17 @@ function clamp(v, lo, hi) {
 function snapPx(v) {
   return Math.round(v / GRID) * GRID;
 }
-/** 像素 → 百分比（0~100），保留 4 位小数，避免存储过长的浮点尾巴。 */
-function toPct(px, stage) {
-  return Math.round((px / stage) * 1000000) / 10000;
+/** MQTT 主题合法性校验（与服务端一致）：# 只能作最后一个完整层级，+ 必须独占一个层级。 */
+function isValidMqttTopic(t) {
+  if (typeof t !== 'string' || t.trim() === '') return false;
+  if (t.includes("\u0000")) return false;
+  const levels = t.split('/');
+  for (let i = 0; i < levels.length; i++) {
+    const lv = levels[i];
+    if (lv.includes('#') && (lv !== '#' || i !== levels.length - 1)) return false;
+    if (lv.includes('+') && lv !== '+') return false;
+  }
+  return true;
 }
 
 createApp({
@@ -27,7 +38,6 @@ createApp({
       panels: [],                // 主页面节点面板（一个订阅主题 = 一个面板）
       settings: { background: null, lock_all: false },
       drag: null,                // 拖拽状态
-      saveTimer: null,
       pollTimer: null,
       refreshing: false,
       mqttConns: [],            // MQTT 连接列表（每条含瞬态编辑字段 password/newTopic/saving）
@@ -222,10 +232,11 @@ createApp({
         alert('切换连接状态失败：' + e.message);
       }
     },
-    /** 向某条连接的待保存主题列表追加一个主题：去空白、去重。 */
-    addConnTopic(conn) {
+    /** 向某条连接追加一个主题并即时提交：去空白、校验合法性、去重。 */
+    async addConnTopic(conn) {
       const t = conn.newTopic.trim();
       if (!t) return;
+      if (!isValidMqttTopic(t)) { alert('主题不合法：' + t); return; }
       if (conn.topics.some((x) => x.topic === t)) {
         alert('该主题已存在：' + t);
         return;
@@ -234,9 +245,36 @@ createApp({
       conn.newTopic = '';
       conn.newTopicName = '';
       conn.newTopicType = 'thermo';
+      await this.applyTopics(conn);
     },
-    removeConnTopic(conn, i) {
-      conn.topics.splice(i, 1);
+    async removeConnTopic(conn, i) {
+      const [removed] = conn.topics.splice(i, 1);
+      if (!(await this.applyTopics(conn))) {
+        conn.topics.push(removed);   // 服务端拒绝时回滚
+      }
+    },
+    /** 主题增删即时生效：只提交主题列表，服务端对在线连接增量订阅、不重连。 */
+    applyTopics(conn) {
+      // 同一连接的多次主题修改串行提交，避免乱序覆盖
+      if (!conn._topicChain) conn._topicChain = Promise.resolve();
+      const run = async () => {
+        try {
+          const updated = await this.api(`/api/mqtt/${conn.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topics: conn.topics }),
+          });
+          conn.topics = updated.topics;   // 采纳服务端归一化结果（去空、去重、截断）
+          this.refreshPanels();            // 同步增删对应的主面板
+          return true;
+        } catch (e) {
+          alert('更新主题失败：' + e.message);
+          return false;
+        }
+      };
+      const p = conn._topicChain.then(run, run);
+      conn._topicChain = p.then(() => {}, () => {});
+      return p;
     },
     async clearMqttPassword(conn) {
       try {
@@ -271,10 +309,10 @@ createApp({
     // ---------- 面板布局 / 拖拽 ----------
     panelStyle(panel) {
       return {
-        left: panel.x + '%',
-        top: panel.y + '%',
-        width: panel.w + '%',
-        height: panel.h + '%',
+        left: panel.x + 'px',
+        top: panel.y + 'px',
+        width: panel.w + 'px',
+        height: panel.h + 'px',
         cursor: this.settings.lock_all ? 'default' : 'grab',
       };
     },
@@ -283,7 +321,6 @@ createApp({
       if (this.settings.lock_all) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;   // 仅左键
       e.preventDefault();
-      const stage = e.currentTarget.parentElement;
       const resize = !!e.target.closest('.resize-handle');       // 从右下角手柄开始 → 调整大小
       this.drag = {
         id: panel.id,
@@ -294,8 +331,8 @@ createApp({
         origY: panel.y,
         origW: panel.w,
         origH: panel.h,
-        stageW: stage.clientWidth,
-        stageH: stage.clientHeight,
+        stageW: STAGE_W,   // 固定虚拟舞台，不受窗口大小影响
+        stageH: STAGE_H,
         el: e.currentTarget,
       };
       e.currentTarget.setPointerCapture(e.pointerId);
@@ -310,23 +347,19 @@ createApp({
       const dy = e.clientY - d.startY;
 
       if (d.mode === 'resize') {
-        // 固定左上角，右下角吸附网格 → 宽度/高度为 5px 倍数
-        const xPx = (d.origX / 100) * d.stageW;
-        const yPx = (d.origY / 100) * d.stageH;
-        const rightPx = snapPx(xPx + (d.origW / 100) * d.stageW + dx);
-        const bottomPx = snapPx(yPx + (d.origH / 100) * d.stageH + dy);
-        const wPx = clamp(rightPx - xPx, MIN_W, d.stageW - xPx);
-        const hPx = clamp(bottomPx - yPx, MIN_H, d.stageH - yPx);
-        panel.w = toPct(wPx, d.stageW);
-        panel.h = toPct(hPx, d.stageH);
+        // 固定左上角，右下角吸附网格 → 宽度/高度为 5px 倍数（像素坐标系，单位即像素）
+        const rightPx = snapPx(d.origX + d.origW + dx);
+        const bottomPx = snapPx(d.origY + d.origH + dy);
+        const wPx = clamp(rightPx - d.origX, MIN_W, d.stageW - d.origX);
+        const hPx = clamp(bottomPx - d.origY, MIN_H, d.stageH - d.origY);
+        panel.w = wPx;
+        panel.h = hPx;
       } else {
-        // 移动：位置 xy 吸附到 5px 网格
-        const maxXPx = d.stageW - (panel.w / 100) * d.stageW;
-        const maxYPx = d.stageH - (panel.h / 100) * d.stageH;
-        const xPx = clamp(snapPx((d.origX / 100) * d.stageW + dx), 0, maxXPx);
-        const yPx = clamp(snapPx((d.origY / 100) * d.stageH + dy), 0, maxYPx);
-        panel.x = toPct(xPx, d.stageW);
-        panel.y = toPct(yPx, d.stageH);
+        // 移动：位置 xy 吸附到 5px 网格（像素坐标系）
+        const maxXPx = d.stageW - panel.w;
+        const maxYPx = d.stageH - panel.h;
+        panel.x = clamp(snapPx(d.origX + dx), 0, maxXPx);
+        panel.y = clamp(snapPx(d.origY + dy), 0, maxYPx);
       }
     },
 
@@ -335,22 +368,22 @@ createApp({
       if (!d || d.id !== panel.id) return;
       this.drag = null;
       d.el.style.cursor = '';
-      this.scheduleSave(panel);
-    },
-
-    scheduleSave(panel) {
-      if (this.saveTimer) clearTimeout(this.saveTimer);
-      this.saveTimer = setTimeout(() => this.saveLayout(panel), SAVE_DEBOUNCE);
+      // 一次手势只松手一次，无需防抖；立即保存避免轮询窗口内被服务端旧值覆盖
+      this.saveLayout(panel);
     },
 
     async saveLayout(panel) {
+      const sent = { x: panel.x, y: panel.y, w: panel.w, h: panel.h };
       try {
         const saved = await this.api(`/api/panels/${panel.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ x: panel.x, y: panel.y, w: panel.w, h: panel.h }),
+          body: JSON.stringify(sent),
         });
-        Object.assign(panel, saved);
+        // 保存期间该面板又被拖动过（值已变）则不覆盖本地新值，等待下一次保存
+        if (panel.x === sent.x && panel.y === sent.y && panel.w === sent.w && panel.h === sent.h) {
+          Object.assign(panel, saved);
+        }
       } catch (e) { console.warn('保存面板布局失败', e); }
     },
 
@@ -417,6 +450,5 @@ createApp({
   },
   beforeUnmount() {
     clearInterval(this.pollTimer);
-    if (this.saveTimer) clearTimeout(this.saveTimer);
   },
 }).mount('#app');

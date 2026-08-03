@@ -94,7 +94,7 @@ function connect(id) {
     connections.set(id, { client: null, connected: false, lastError: (err && err.message) || String(err) });
     return;
   }
-  const entry = { client: c, connected: false, lastError: null };
+  const entry = { client: c, connected: false, lastError: null, topics: new Set() };
   connections.set(id, entry);
   // 连接被替换/删除后，迟到回调一律忽略（沿用单连接时代的 client !== c 防陈旧模式）
   const guard = () => connections.get(id) !== entry;
@@ -104,6 +104,7 @@ function connect(id) {
     entry.connected = true;
     entry.lastError = null;
     const subs = row.topics.map((t) => t.topic);
+    entry.topics = new Set(subs);
     if (subs.length > 0) {
       c.subscribe(subs);
       console.log(`MQTT 已连接 [#${id} ${row.name}]: ${url} 订阅 ${subs.join(', ')}`);
@@ -155,6 +156,24 @@ function reconnectConnection(id) {
   connect(id);
 }
 
+/** 订阅列表已变化：对已连接的客户端做增量 SUBSCRIBE/UNSUBSCRIBE，不重连。
+ * 连接未启用 / 无存活客户端时仅改库，重连后按最新列表自然生效。 */
+function syncSubscriptions(id) {
+  const row = db.getMqttConnection(id);
+  const entry = connections.get(id);
+  if (!row || !row.enabled || !entry || !entry.client || !entry.connected) return;
+  const next = new Set(row.topics.map((t) => t.topic));
+  const prev = entry.topics || new Set();
+  const add = [...next].filter((t) => !prev.has(t));
+  const del = [...prev].filter((t) => !next.has(t));
+  if (add.length) entry.client.subscribe(add);
+  if (del.length) entry.client.unsubscribe(del);
+  entry.topics = next;
+  if (add.length || del.length) {
+    console.log(`MQTT 订阅已更新 [#${id} ${row.name}]: +${add.join(', ') || '—'} -${del.join(', ') || '—'}`);
+  }
+}
+
 function status() {
   const list = [];
   let anyConnected = false;
@@ -174,5 +193,6 @@ module.exports = {
   connect,
   stopConnection,
   reconnectConnection,
+  syncSubscriptions,
   status,
 };

@@ -151,7 +151,12 @@ router.put('/:id', (req, res) => {
 
   const updated = db.updateMqttConnection(row.id, fields);
   if (body.topics !== undefined) db.syncTopicPanels(updated.id, topics);
-  mqttClient.reconnectConnection(updated.id);
+  // 只改主题：对在线连接做增量订阅（不重连）；连接级参数变化才整体重连
+  if (body.topics !== undefined && Object.keys(fields).length === 1) {
+    mqttClient.syncSubscriptions(updated.id);
+  } else {
+    mqttClient.reconnectConnection(updated.id);
+  }
   res.json(connToJson(updated));
 });
 

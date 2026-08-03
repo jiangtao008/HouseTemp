@@ -25,7 +25,7 @@
       <div class="stage-toolbar">
         <button class="btn" @click="$refs.bgInput.click()">🖼 设置背景图</button>
         <button v-if="settings.background" class="btn" @click="removeBackground">移除背景</button>
-        <span class="stage-hint">拖动面板可调整位置，右下角手柄可调整大小{{ settings.lock_all ? '（当前已锁定）' : '' }}</span>
+        <span class="stage-hint">拖动面板可调整位置，右下角手柄可调整大小；面板按像素固定，窗口小于画布时滚动查看{{ settings.lock_all ? '（当前已锁定）' : '' }}</span>
       </div>
 
       <!-- 节点面板（与订阅主题一一对应） -->
@@ -211,8 +211,9 @@
       </div>
 
       <div class="mqtt-tip">
-        每条连接独立启用/停用、独立主题列表，保存后自动重连该连接；密码不回显，留空表示不修改；
-        每个主题可配置节点名字与类型（主面板按主题一一对应显示，当前仅温湿度面板，其余类型待支持）；
+        主题的增删即时生效：在线连接直接增量订阅，无需重连，对应主面板自动增删；
+        服务器地址、端口、账号、密码、启停等连接级参数需点「保存并重连」；
+        密码不回显，留空表示不修改；每个主题可配置节点名字与类型（当前仅温湿度面板，其余类型待支持）；
         主题支持 +/# 通配符，列表为空则不订阅任何主题。
       </div>
     </main>

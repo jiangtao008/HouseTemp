@@ -7,6 +7,11 @@ const Database = require('better-sqlite3');
 
 let db = null;
 
+// 主页面虚拟舞台尺寸（像素）。面板位置/大小以该坐标系保存，与浏览器窗口大小无关。
+// 注意：前端 public/app.js 中的 STAGE_W/STAGE_H 需与此保持一致。
+const STAGE_W = 2560;
+const STAGE_H = 1440;
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS nodes (
     gateway_id      INTEGER NOT NULL,
@@ -73,10 +78,10 @@ CREATE TABLE IF NOT EXISTS topic_panels (
     topic         TEXT    NOT NULL,             -- 主题字符串（可含 #/+ 通配符）
     name          TEXT    NOT NULL DEFAULT '',  -- 节点名字（主面板标题）
     type          TEXT    NOT NULL DEFAULT 'thermo',  -- 面板类型：thermo=温湿度, switch=开关(待支持)
-    x             REAL    NOT NULL DEFAULT 10,
-    y             REAL    NOT NULL DEFAULT 10,
-    w             REAL    NOT NULL DEFAULT 20,
-    h             REAL    NOT NULL DEFAULT 24,
+    x             REAL    NOT NULL DEFAULT 150, -- 像素坐标（2560×1440 虚拟舞台）
+    y             REAL    NOT NULL DEFAULT 110,
+    w             REAL    NOT NULL DEFAULT 480,
+    h             REAL    NOT NULL DEFAULT 300,
     temperature   REAL,
     humidity      INTEGER,
     battery       REAL,
@@ -138,6 +143,25 @@ function migrateIfNeeded() {
   }
 }
 
+/** 面板布局单位迁移：百分比 → 像素（2560×1440 虚拟舞台）。一次性，由 layout_px 标记幂等。 */
+function migratePanelLayoutToPx() {
+  const done = db.prepare("SELECT 1 FROM settings WHERE key = 'layout_px'").get();
+  if (done) return;
+  const rows = db.prepare('SELECT id, x, y, w, h FROM topic_panels').all();
+  const upd = db.prepare('UPDATE topic_panels SET x = ?, y = ?, w = ?, h = ? WHERE id = ?');
+  for (const p of rows) {
+    upd.run(
+      Math.round((p.x / 100) * STAGE_W),
+      Math.round((p.y / 100) * STAGE_H),
+      Math.round((p.w / 100) * STAGE_W),
+      Math.round((p.h / 100) * STAGE_H),
+      p.id
+    );
+  }
+  setSetting('layout_px', '1');
+  console.log(`面板布局已迁移到像素坐标（${STAGE_W}×${STAGE_H}），共 ${rows.length} 个面板`);
+}
+
 function init(cfg) {
   fs.mkdirSync(path.dirname(cfg.database.path), { recursive: true });
   db = new Database(cfg.database.path);
@@ -147,6 +171,7 @@ function init(cfg) {
   db.exec(SCHEMA);
   const seed = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) seed.run(k, v);
+  migratePanelLayoutToPx();
   migrateMqttConnections(cfg);
 }
 
@@ -417,7 +442,7 @@ function syncTopicPanels(connectionId, topics) {
   for (const t of topics) {
     if (!existSet.has(t.topic)) {
       const col = (base + k) % 4, row = Math.floor((base + k) / 4);
-      insert.run(connectionId, t.topic, t.name, t.type, 6 + col * 24, 8 + row * 28, 20, 24);
+      insert.run(connectionId, t.topic, t.name, t.type, 150 + col * 620, 110 + row * 340, 480, 300);
       k++;
     } else {
       update.run(t.name, t.type, connectionId, t.topic);
@@ -479,6 +504,8 @@ function updatePanelLayout(id, x, y, w, h) {
 
 module.exports = {
   init,
+  STAGE_W,
+  STAGE_H,
   nowIso,
   listNodes,
   getNode,
