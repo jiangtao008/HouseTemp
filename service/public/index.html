@@ -16,50 +16,104 @@
 
     <!-- 主页面 -->
     <main v-show="tab === 'main'" class="main-page">
-      <div class="main-stage">
+      <div class="main-stage" ref="stageBox">
         <!-- 主页面工具栏 -->
         <div class="stage-toolbar">
-          <span class="stage-hint">拖动面板可调整位置，右下角手柄可调整大小；面板按像素固定，窗口小于画布时滚动查看{{ settings.lock_all ? '（当前已锁定）' : '' }}</span>
+          <span class="stage-hint">{{ selectedPanel && selectedPanel.locked
+            ? '右侧展开面板可为它添加节点小面板，数据到达自动刷新（🔒 当前面板已锁定，仅查看）'
+            : '右侧展开面板可为它添加节点小面板；拖动小面板可调整位置，右下角手柄可调整大小' }}</span>
         </div>
 
-        <!-- 节点面板（与订阅主题一一对应） -->
-        <div v-for="(panel, i) in panels" :key="panel.id"
-             class="node-panel" :class="{ stale: panel.stale }"
-             :style="panelStyle(panel, i)"
-             @pointerdown="startDrag($event, panel)"
-             @pointermove="onDrag($event, panel)"
-             @pointerup="endDrag($event, panel)"
-             @pointercancel="endDrag($event, panel)">
-          <div class="node-name">{{ panel.name || panel.topic }}</div>
-          <template v-if="panel.type === 'thermo'">
-            <div class="node-temp">{{ fmtTemp(panel.temperature) }}</div>
-            <div class="node-row">💧 湿度 {{ panel.humidity != null ? panel.humidity + ' %' : '--' }}</div>
-            <div class="node-row">🔋 电池 {{ batteryText(panel) }}</div>
-            <div class="node-row sub" v-if="panel.rssi != null">信号 {{ panel.rssi }} dBm</div>
-          </template>
-          <div v-else class="node-row sub">该面板类型待支持（{{ panel.type }}）</div>
-          <div v-if="panel.stale" class="stale-badge">离线</div>
-          <div v-if="!settings.lock_all" class="resize-handle" title="拖动调整大小"></div>
-        </div>
+        <!-- 主舞台：2560×1440 虚拟舞台等比缩放，小面板按坐标绝对定位（面板解锁时可拖动/缩放） -->
+        <template v-if="selectedPanel">
+          <div class="stage" :style="stageStyle">
+            <div v-for="w in widgetsOfSelected" :key="w.id"
+                 class="node-panel widget"
+                 :class="{ stale: w.stale, editable: panelEditable, dragging: dragState && dragState.id === w.id }"
+                 :style="widgetStyle(w)"
+                 @pointerdown="startWidgetDrag($event, w)"
+                 @pointermove="onWidgetDrag($event, w)"
+                 @pointerup="endWidgetDrag($event, w)"
+                 @pointercancel="endWidgetDrag($event, w)">
+              <div class="node-name">{{ widgetName(w) }}</div>
+              <template v-if="w.type === 'thermo'">
+                <div class="node-temp">{{ fmtTemp(w.temperature) }}</div>
+                <div class="node-row">💧 湿度 {{ w.humidity != null ? w.humidity + ' %' : '--' }}</div>
+                <div class="node-row">🔋 电池 {{ batteryText(w) }}</div>
+                <div class="node-row sub" v-if="w.rssi != null">信号 {{ w.rssi }} dBm</div>
+              </template>
+              <div v-else class="node-row sub">该类型待支持（{{ w.type }}）</div>
+              <div v-if="w.stale" class="stale-badge">离线</div>
+              <div v-if="panelEditable" class="resize-handle" title="拖动调整大小"></div>
+            </div>
+          </div>
+          <div v-if="widgetsOfSelected.length === 0" class="widget-empty">
+            「{{ selectedPanel.name }}」暂无节点小面板<br>
+            <span class="sub">在右侧展开该面板 →「添加节点」</span>
+          </div>
+        </template>
 
-        <div v-if="panels.length === 0" class="empty-hint">
-          <p>暂无配置的面板</p>
-          <p class="sub">请到「订阅页面」为订阅主题配置节点名字与类型</p>
+        <div v-else class="empty-hint">
+          <p>暂无面板</p>
+          <p class="sub">点击右侧「＋ 添加面板」创建一个面板</p>
         </div>
       </div>
 
-      <!-- 右侧边栏（可收起/展开） -->
-      <aside class="side-rail" :class="{ collapsed: sideRailCollapsed }">
+      <!-- 右侧边栏（可收起/展开、宽度可拖动调节）：面板管理表（二级：面板 → 节点小面板） -->
+      <aside class="side-rail"
+             :class="{ collapsed: sideRailCollapsed, resizing: railResizing }"
+             :style="sideRailCollapsed ? undefined : { width: sideRailWidth + 'px' }">
+        <div v-if="!sideRailCollapsed" class="rail-resizer" title="拖动调整宽度"
+             @pointerdown="startRailResize"></div>
         <button class="rail-toggle" @click="sideRailCollapsed = !sideRailCollapsed"
                 :title="sideRailCollapsed ? '展开侧边栏' : '收起侧边栏'">
           {{ sideRailCollapsed ? '◀' : '▶' }}
         </button>
         <template v-if="!sideRailCollapsed">
-          <button class="btn rail-btn" :class="{ locked: settings.lock_all }" @click="toggleLock">
-            <span class="lock-icon">{{ settings.lock_all ? '🔒' : '🔓' }}</span>
-            {{ settings.lock_all ? '已锁定' : '锁定全部' }}
-          </button>
-          <button class="btn rail-btn" title="功能待添加">＋ 添加矩形</button>
+          <button class="btn rail-btn add-panel-btn" @click="addPanel">＋ 添加面板</button>
+          <div class="panel-list">
+            <div v-if="panels.length === 0" class="panel-list-empty">暂无面板</div>
+            <div v-for="panel in panels" :key="panel.id" class="panel-block">
+              <div class="panel-item-row">
+                <div class="panel-item" :class="{ active: panel.id === selectedPanelId }"
+                     @click="onPanelRowClick(panel)" :title="panel.name">
+                  <span class="panel-caret">{{ expandedPanelId === panel.id ? '▾' : '▸' }}</span>
+                  <input v-if="renamingPanelId === panel.id" v-model="renameText"
+                         class="panel-rename-input" placeholder="面板名" @click.stop
+                         @keyup.enter="saveRename(panel)" @keyup.esc="cancelRename"
+                         @blur="saveRename(panel)" />
+                  <template v-else>
+                    <span class="panel-item-name">{{ panel.name }}</span>
+                  </template>
+                  <span class="panel-widget-count">{{ widgetsOf(panel.id).length }}</span>
+                </div>
+                <button class="panel-icon-btn" :class="{ locked: panel.locked }"
+                        @click="togglePanelLock(panel)"
+                        :title="panel.locked ? '解锁面板' : '锁定面板'">{{ panel.locked ? '🔒' : '🔓' }}</button>
+                <button class="panel-icon-btn" @click="startRename(panel)" title="重命名"
+                        :disabled="panel.locked">✎</button>
+                <button class="panel-icon-btn del" @click="removePanel(panel)" title="删除面板"
+                        :disabled="panel.locked">✕</button>
+              </div>
+              <div v-show="expandedPanelId === panel.id" class="panel-detail">
+                <div v-if="widgetsOf(panel.id).length === 0" class="widget-row-empty">暂无节点小面板</div>
+                <div v-for="w in widgetsOf(panel.id)" :key="w.id" class="widget-row">
+                  <span class="panel-dot" :class="{ off: w.stale }"></span>
+                  <span class="widget-row-name" :title="w.topic">{{ widgetName(w) }}</span>
+                  <span class="widget-row-temp">{{ fmtTemp(w.temperature) }}</span>
+                  <button class="panel-icon-btn del" title="删除节点小面板" @click="removeWidget(w)"
+                          :disabled="panel.locked">✕</button>
+                </div>
+                <select class="widget-add-select" v-model.number="newWidgetIndex" @change="onAddWidget(panel)"
+                        :disabled="panel.locked || availableForPanel(panel.id).length === 0">
+                  <option value="-1" disabled>＋ 添加节点…</option>
+                  <option v-for="(n, i) in availableForPanel(panel.id)" :key="i" :value="i" :title="n.topic">
+                    {{ (n.name || n.topic) }}（{{ n.topic }}）
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
         </template>
       </aside>
     </main>
@@ -231,10 +285,11 @@
       </div>
 
       <div class="mqtt-tip">
-        主题的增删即时生效：在线连接直接增量订阅，无需重连，对应主面板自动增删；
+        主题的增删即时生效：在线连接直接增量订阅，无需重连；取消订阅的主题会从各面板移除对应节点小面板；
         服务器地址、端口、账号、密码、启停等连接级参数需点「保存并重连」；
-        密码不回显，留空表示不修改；每个主题可配置节点名字与类型（当前仅温湿度面板，其余类型待支持）；
+        密码不回显，留空表示不修改；每个主题可配置节点名字与类型（当前仅温湿度，其余类型待支持）；
         主题支持 +/# 通配符，列表为空则不订阅任何主题。
+        主页面节点小面板需手动添加：主页面右侧展开面板 →「添加节点」选择该主题。
       </div>
     </main>
   </div>

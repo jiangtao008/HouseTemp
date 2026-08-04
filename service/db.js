@@ -72,22 +72,30 @@ CREATE TABLE IF NOT EXISTS mqtt_connections (
     updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS panels (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT    NOT NULL DEFAULT '未命名面板',
+    locked     INTEGER NOT NULL DEFAULT 0,      -- 1=锁定：禁止改名/删除/增删小面板
+    created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS topic_panels (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    connection_id INTEGER NOT NULL,             -- 所属 MQTT 连接
-    topic         TEXT    NOT NULL,             -- 主题字符串（可含 #/+ 通配符）
-    name          TEXT    NOT NULL DEFAULT '',  -- 节点名字（主面板标题）
+    panel_id      INTEGER NOT NULL,             -- 所属面板（容器，见 panels 表）
+    connection_id INTEGER,                      -- 绑定节点的来源连接（可为空：未绑定主题的占位）
+    topic         TEXT,                         -- 绑定节点的订阅主题（可为空）
+    name          TEXT    NOT NULL DEFAULT '',  -- 小面板标题（节点名字）
     type          TEXT    NOT NULL DEFAULT 'thermo',  -- 面板类型：thermo=温湿度, switch=开关(待支持)
-    x             REAL    NOT NULL DEFAULT 150, -- 像素坐标（2560×1440 虚拟舞台）
-    y             REAL    NOT NULL DEFAULT 110,
-    w             REAL    NOT NULL DEFAULT 480,
-    h             REAL    NOT NULL DEFAULT 300,
+    x             REAL    NOT NULL DEFAULT 10,
+    y             REAL    NOT NULL DEFAULT 10,
+    w             REAL    NOT NULL DEFAULT 240,
+    h             REAL    NOT NULL DEFAULT 200,
     temperature   REAL,
     humidity      INTEGER,
     battery       REAL,
     rssi          INTEGER,
     last_seen     TEXT,
-    UNIQUE (connection_id, topic)
+    UNIQUE (panel_id, connection_id, topic)
 );
 `;
 
@@ -162,6 +170,133 @@ function migratePanelLayoutToPx() {
   console.log(`面板布局已迁移到像素坐标（${STAGE_W}×${STAGE_H}），共 ${rows.length} 个面板`);
 }
 
+/** topic_panels 支持空白面板：connection_id/topic 改为可空（SQLite 的 UNIQUE 把 NULL 视为互异，
+ * 因此 (NULL, NULL) 的空白面板可有多张，订阅主题面板的 (connection_id, topic) 唯一约束不受影响）。
+ * 一次性，由 topic_panels_nullable 标记幂等。 */
+function migrateTopicPanelsNullable() {
+  const done = db.prepare("SELECT 1 FROM settings WHERE key = 'topic_panels_nullable'").get();
+  if (done) return;
+  const cols = db.prepare('PRAGMA table_info(topic_panels)').all();
+  const conn = cols.find((c) => c.name === 'connection_id');
+  const topic = cols.find((c) => c.name === 'topic');
+  if (conn && conn.notnull === 0 && topic && topic.notnull === 0) {
+    setSetting('topic_panels_nullable', '1');
+    return;
+  }
+  db.exec('BEGIN');
+  try {
+    db.exec('ALTER TABLE topic_panels RENAME TO topic_panels_legacy');
+    db.exec(`
+      CREATE TABLE topic_panels (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        connection_id INTEGER,                      -- 所属 MQTT 连接（可空：空白面板无来源连接）
+        topic         TEXT,                         -- 主题字符串（可含 #/+ 通配符；可空：空白面板无主题）
+        name          TEXT    NOT NULL DEFAULT '',  -- 节点名字（主面板标题）
+        type          TEXT    NOT NULL DEFAULT 'thermo',  -- 面板类型：thermo=温湿度, switch=开关(待支持)
+        x             REAL    NOT NULL DEFAULT 150, -- 像素坐标（2560×1440 虚拟舞台）
+        y             REAL    NOT NULL DEFAULT 110,
+        w             REAL    NOT NULL DEFAULT 480,
+        h             REAL    NOT NULL DEFAULT 300,
+        temperature   REAL,
+        humidity      INTEGER,
+        battery       REAL,
+        rssi          INTEGER,
+        last_seen     TEXT,
+        UNIQUE (connection_id, topic)
+      )
+    `);
+    db.exec(
+      `INSERT INTO topic_panels (id, connection_id, topic, name, type, x, y, w, h, temperature, humidity, battery, rssi, last_seen)
+       SELECT id, connection_id, topic, name, type, x, y, w, h, temperature, humidity, battery, rssi, last_seen
+       FROM topic_panels_legacy`
+    );
+    db.exec('DROP TABLE topic_panels_legacy');
+    db.exec('COMMIT');
+    setSetting('topic_panels_nullable', '1');
+    console.log('topic_panels 已迁移为可空 connection/topic（支持空白面板）');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** 面板模型升级：新增 panels 容器表，topic_panels 改为「节点小面板」并归入某个面板。
+ * 旧库迁移：已有订阅小面板全部放入「默认面板」；上一版的空白面板（connection_id/topic 为空）
+ * 转成面板容器。一次性，由 panels_containers_v1 标记幂等。 */
+function migratePanelContainers() {
+  const done = db.prepare("SELECT 1 FROM settings WHERE key = 'panels_containers_v1'").get();
+  if (done) return;
+  db.exec('BEGIN');
+  try {
+    db.exec(`CREATE TABLE IF NOT EXISTS panels (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      name       TEXT NOT NULL DEFAULT '未命名面板',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+    let def = db.prepare('SELECT id FROM panels ORDER BY id LIMIT 1').get();
+    const defaultId = def ? def.id
+                          : db.prepare('INSERT INTO panels (name) VALUES (?)').run('默认面板').lastInsertRowid;
+
+    const cols = db.prepare('PRAGMA table_info(topic_panels)').all();
+    const hasPanelId = cols.some((c) => c.name === 'panel_id');
+    if (!hasPanelId) {
+      // 旧表：空白 topic_panels 行 → 面板容器；真实订阅小面板 → 默认面板
+      db.exec('ALTER TABLE topic_panels RENAME TO topic_panels_legacy');
+      db.exec(`
+        CREATE TABLE topic_panels (
+          id            INTEGER PRIMARY KEY AUTOINCREMENT,
+          panel_id      INTEGER NOT NULL,
+          connection_id INTEGER,
+          topic         TEXT,
+          name          TEXT    NOT NULL DEFAULT '',
+          type          TEXT    NOT NULL DEFAULT 'thermo',
+          x             REAL    NOT NULL DEFAULT 10,
+          y             REAL    NOT NULL DEFAULT 10,
+          w             REAL    NOT NULL DEFAULT 240,
+          h             REAL    NOT NULL DEFAULT 200,
+          temperature   REAL,
+          humidity      INTEGER,
+          battery       REAL,
+          rssi          INTEGER,
+          last_seen     TEXT,
+          UNIQUE (panel_id, connection_id, topic)
+        )
+      `);
+      const blanks = db.prepare('SELECT name FROM topic_panels_legacy WHERE connection_id IS NULL').all();
+      const insPanel = db.prepare('INSERT INTO panels (name) VALUES (?)');
+      for (const b of blanks) insPanel.run(b.name || '未命名面板');
+      db.exec(
+        `INSERT INTO topic_panels (id, panel_id, connection_id, topic, name, type, x, y, w, h, temperature, humidity, battery, rssi, last_seen)
+         SELECT id, ${defaultId}, connection_id, topic, name, type, x, y, w, h, temperature, humidity, battery, rssi, last_seen
+         FROM topic_panels_legacy WHERE connection_id IS NOT NULL`
+      );
+      db.exec('DROP TABLE topic_panels_legacy');
+    } else {
+      // 新库 / 部分迁移：小面板归入默认面板，空白行转容器
+      db.exec(`UPDATE topic_panels SET panel_id = ${defaultId} WHERE panel_id IS NULL AND connection_id IS NOT NULL`);
+      const blanks = db.prepare('SELECT id, name FROM topic_panels WHERE connection_id IS NULL').all();
+      const insPanel = db.prepare('INSERT INTO panels (name) VALUES (?)');
+      const del = db.prepare('DELETE FROM topic_panels WHERE id = ?');
+      for (const b of blanks) { insPanel.run(b.name || '未命名面板'); del.run(b.id); }
+    }
+    db.exec('COMMIT');
+    setSetting('panels_containers_v1', '1');
+    console.log('已迁移到「面板容器 + 节点小面板」模型');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/** panels 表增加 locked 列（面板锁定标记）。按列存在性幂等。 */
+function migratePanelLocked() {
+  const cols = db.prepare('PRAGMA table_info(panels)').all();
+  if (!cols.some((c) => c.name === 'locked')) {
+    db.exec('ALTER TABLE panels ADD COLUMN locked INTEGER NOT NULL DEFAULT 0');
+    console.log('panels 表已增加 locked 列');
+  }
+}
+
 function init(cfg) {
   fs.mkdirSync(path.dirname(cfg.database.path), { recursive: true });
   db = new Database(cfg.database.path);
@@ -172,6 +307,9 @@ function init(cfg) {
   const seed = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) seed.run(k, v);
   migratePanelLayoutToPx();
+  migrateTopicPanelsNullable();
+  migratePanelContainers();
+  migratePanelLocked();
   migrateMqttConnections(cfg);
 }
 
@@ -411,7 +549,8 @@ function deleteMqttConnection(id) {
 }
 
 // ---------------------------------------------------------------------------
-// 主题面板（订阅主题 → 主页面节点面板）
+// 面板容器 + 节点小面板
+// panels 表 = 面板容器（主舞台一次显示一个）；topic_panels 表 = 节点小面板（归属某面板、绑定订阅主题）。
 // ---------------------------------------------------------------------------
 
 /** MQTT 通配符匹配：pattern 支持 +（单层）与 #（剩余所有层，# 匹配零层亦可）。 */
@@ -427,40 +566,25 @@ function topicMatches(pattern, topic) {
   return p.length === t.length;
 }
 
-/** 保存连接主题后同步面板：新增缺失、更新 name/type、删除被移除的主题。只写配置与布局，不碰已有数据列。 */
+/** 保存连接主题后同步节点小面板：更新已有小面板的 name/type；主题被取消订阅 → 删除绑定该主题的小面板。
+ * 不再自动创建小面板（由用户在主页面侧边栏手动添加）。 */
 function syncTopicPanels(connectionId, topics) {
-  const existing = db.prepare('SELECT topic FROM topic_panels WHERE connection_id = ?').all(connectionId);
-  const existSet = new Set(existing.map((r) => r.topic));
   const keepSet = new Set(topics.map((t) => t.topic));
-  const base = db.prepare('SELECT COUNT(*) AS n FROM topic_panels').get().n;
-  const insert = db.prepare(
-    'INSERT INTO topic_panels (connection_id, topic, name, type, x, y, w, h) VALUES (?, ?, ?, ?, ?, ?, ?, ?)' +
-    ' ON CONFLICT(connection_id, topic) DO UPDATE SET name = excluded.name, type = excluded.type'
-  );
-  const update = db.prepare('UPDATE topic_panels SET name = ?, type = ? WHERE connection_id = ? AND topic = ?');
-  let k = 0;
-  for (const t of topics) {
-    if (!existSet.has(t.topic)) {
-      const col = (base + k) % 4, row = Math.floor((base + k) / 4);
-      insert.run(connectionId, t.topic, t.name, t.type, 150 + col * 620, 110 + row * 340, 480, 300);
-      k++;
-    } else {
-      update.run(t.name, t.type, connectionId, t.topic);
-    }
-  }
-  for (const topic of existSet) {
-    if (!keepSet.has(topic)) {
-      db.prepare('DELETE FROM topic_panels WHERE connection_id = ? AND topic = ?').run(connectionId, topic);
-    }
+  const upd = db.prepare('UPDATE topic_panels SET name = ?, type = ? WHERE connection_id = ? AND topic = ?');
+  for (const t of topics) upd.run(t.name, t.type, connectionId, t.topic);
+  const rows = db.prepare('SELECT id, topic FROM topic_panels WHERE connection_id = ?').all(connectionId);
+  const del = db.prepare('DELETE FROM topic_panels WHERE id = ?');
+  for (const r of rows) {
+    if (!keepSet.has(r.topic)) del.run(r.id);
   }
 }
 
-/** 删除连接时清理其主题面板。 */
+/** 删除连接时清理其绑定主题的小面板。 */
 function deleteTopicPanelsForConnection(connectionId) {
   return db.prepare('DELETE FROM topic_panels WHERE connection_id = ?').run(connectionId);
 }
 
-/** 一条消息按主题通配符路由到该连接下所有命中面板，更新其最新数据。 */
+/** 一条消息按主题通配符路由到该连接下所有命中节点小面板，更新其最新数据。 */
 function routeMessageToPanels(rec, topic, connectionId) {
   const panels = db.prepare('SELECT id, topic FROM topic_panels WHERE connection_id = ?').all(connectionId);
   if (!panels.length) return;
@@ -476,12 +600,46 @@ function routeMessageToPanels(rec, topic, connectionId) {
 
 const PANEL_STALE_AFTER_MS = 10 * 60 * 1000; // 超过 10 分钟未上报视为离线
 
-/** 已启用连接下的全部主题面板（主页面数据源）。 */
+/** 全部面板容器。 */
 function listPanels() {
+  return db.prepare('SELECT id, name, locked FROM panels ORDER BY id').all();
+}
+
+function getPanel(id) {
+  return db.prepare('SELECT * FROM panels WHERE id = ?').get(id);
+}
+
+function createPanel(name) {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM panels').get().n;
+  const info = db.prepare('INSERT INTO panels (name, locked) VALUES (?, 0)')
+    .run((name && String(name).trim()) || `新面板 ${count + 1}`);
+  return getPanel(info.lastInsertRowid);
+}
+
+/** 部分更新面板：只写传入的字段（name 改名 / locked 锁定）。 */
+function updatePanel(id, { name, locked } = {}) {
+  const sets = [];
+  const params = { id };
+  if (name !== undefined) { sets.push('name = @name'); params.name = String(name).trim().slice(0, 64); }
+  if (locked !== undefined) { sets.push('locked = @locked'); params.locked = locked ? 1 : 0; }
+  if (!sets.length) return getPanel(id);
+  db.prepare(`UPDATE panels SET ${sets.join(', ')} WHERE id = @id`).run(params);
+  return getPanel(id);
+}
+
+/** 删除面板容器及其内全部节点小面板。 */
+function deletePanel(id) {
+  db.prepare('DELETE FROM topic_panels WHERE panel_id = ?').run(id);
+  return db.prepare('DELETE FROM panels WHERE id = ?').run(id);
+}
+
+/** 全部节点小面板（主页面数据源）：只列出已启用连接绑定的。 */
+function listWidgets() {
   const rows = db.prepare(
     `SELECT p.* FROM topic_panels p
-     JOIN mqtt_connections c ON c.id = p.connection_id
-     WHERE c.enabled = 1 ORDER BY p.id`
+     LEFT JOIN mqtt_connections c ON c.id = p.connection_id
+     WHERE p.connection_id IS NULL OR c.enabled = 1
+     ORDER BY p.panel_id, p.id`
   ).all();
   return rows.map((r) => {
     let stale = false;
@@ -493,13 +651,47 @@ function listPanels() {
   });
 }
 
-function getPanel(id) {
+function getWidget(id) {
   return db.prepare('SELECT * FROM topic_panels WHERE id = ?').get(id);
 }
 
-function updatePanelLayout(id, x, y, w, h) {
+function updateWidgetLayout(id, x, y, w, h) {
   db.prepare('UPDATE topic_panels SET x = ?, y = ?, w = ?, h = ? WHERE id = ?').run(x, y, w, h, id);
-  return getPanel(id);
+  return getWidget(id);
+}
+
+/** 向某面板添加一个绑定订阅主题的节点小面板（同面板同主题去重）。 */
+function createWidget(panelId, node) {
+  const exist = db.prepare(
+    'SELECT id FROM topic_panels WHERE panel_id = ? AND connection_id = ? AND topic = ?'
+  ).get(panelId, node.connection_id, node.topic);
+  if (exist) return getWidget(exist.id);
+  const info = db.prepare(
+    'INSERT INTO topic_panels (panel_id, connection_id, topic, name, type) VALUES (?, ?, ?, ?, ?)'
+  ).run(panelId, node.connection_id, node.topic, node.name || '', node.type || 'thermo');
+  return getWidget(info.lastInsertRowid);
+}
+
+function deleteWidget(id) {
+  return db.prepare('DELETE FROM topic_panels WHERE id = ?').run(id);
+}
+
+/** 可添加的节点（订阅主题池）：所有已启用连接的订阅主题，供「添加节点」下拉使用。 */
+function listAvailableNodes() {
+  const nodes = [];
+  for (const conn of listMqttConnections()) {
+    if (!conn.enabled) continue;
+    for (const t of conn.topics) {
+      nodes.push({
+        connection_id: conn.id,
+        connection_name: conn.name,
+        topic: t.topic,
+        name: t.name || '',
+        type: t.type || 'thermo',
+      });
+    }
+  }
+  return nodes;
 }
 
 module.exports = {
@@ -528,5 +720,13 @@ module.exports = {
   routeMessageToPanels,
   listPanels,
   getPanel,
-  updatePanelLayout,
+  createPanel,
+  updatePanel,
+  deletePanel,
+  listWidgets,
+  getWidget,
+  updateWidgetLayout,
+  createWidget,
+  deleteWidget,
+  listAvailableNodes,
 };

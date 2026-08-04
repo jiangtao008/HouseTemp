@@ -27,3 +27,10 @@ desk/build/*
 *.hex
 *.out
 *.map
+
+# service (Node 服务端)
+service/data/
+service/public/uploads/
+service/config.json
+service/node_modules/
+*.db

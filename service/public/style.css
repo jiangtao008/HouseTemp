@@ -54,11 +54,12 @@ body {
 /* ---------- 主页面 ---------- */
 .main-stage {
   position: relative;
-  flex: none;            /* 不随窗口伸缩 */
-  width: 2560px;         /* 固定虚拟舞台尺寸（像素），与 app.js 的 STAGE_W/H 一致 */
-  height: 1440px;
-  flex-shrink: 0;
-  margin: auto;          /* 窗口比舞台大时居中留白，窗口更小时自动滚动 */
+  flex: 1;               /* 填满主页面可用空间（单面板展示，不再用固定 2560×1440 画布） */
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   background:
     radial-gradient(1200px 800px at 20% 0%, #20263a 0%, transparent 60%),
@@ -86,7 +87,7 @@ body {
 .main-page {
   flex: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: stretch;   /* 舞台纵向填满可用空间 */
   position: relative;
   min-width: 0;
 }
@@ -114,6 +115,24 @@ body {
   padding: 12px 8px;
   align-items: center;
 }
+/* 拖拽调节宽度时去掉过渡，跟随鼠标实时变化 */
+.side-rail.resizing { transition: none; }
+/* 左侧拖拽把手：跨在边栏左缘，悬停高亮 */
+.rail-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background .15s;
+}
+.rail-resizer:hover,
+.side-rail.resizing .rail-resizer {
+  background: rgba(255, 255, 255, .14);
+}
 .rail-toggle {
   flex: none;
   align-self: flex-start;   /* 展开时贴在边栏左缘（靠向舞台） */
@@ -139,8 +158,174 @@ body {
   gap: 8px;
   width: 100%;
 }
-.rail-btn.locked { background: #c0392b; color: #fff; }
-.rail-btn.locked:hover { background: #d64537; }
+/* 面板管理表（侧边栏）：面板容器 → 节点小面板 */
+.add-panel-btn { width: 100%; }
+.panel-list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+.panel-list-empty {
+  padding: 10px 4px;
+  font-size: 12px;
+  color: #6b7080;
+  text-align: center;
+}
+.panel-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.panel-item-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.panel-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  text-align: left;
+  color: #cfd3de;
+  background: #262936;
+  border: 1px solid #33374a;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: background .15s, border-color .15s;
+}
+.panel-item:hover { background: #2f3344; }
+.panel-item.active {
+  background: #3b5bdb;
+  border-color: #3b5bdb;
+  color: #fff;
+}
+.panel-caret {
+  flex: none;
+  width: 12px;
+  font-size: 10px;
+  color: #8a90a2;
+}
+.panel-item.active .panel-caret { color: #dfe6ff; }
+.panel-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.panel-widget-count {
+  flex: none;
+  min-width: 18px;
+  text-align: center;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(92, 124, 250, .14);
+  color: #9db1f8;
+}
+.panel-item.active .panel-widget-count {
+  background: rgba(255, 255, 255, .22);
+  color: #fff;
+}
+.panel-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 8px;
+  padding: 4px 0 4px 10px;
+  border-left: 2px solid #33374a;
+}
+.widget-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 12px;
+  color: #cfd3de;
+  background: #1f212b;
+  border: 1px solid #2b2e3a;
+  border-radius: 6px;
+}
+.widget-row-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.widget-row-temp {
+  flex: none;
+  font-size: 12px;
+  color: #9db1f8;
+}
+.widget-row-empty {
+  padding: 2px 4px;
+  font-size: 11px;
+  color: #6b7080;
+}
+.widget-add-select {
+  width: 100%;
+  padding: 5px 6px;
+  font-size: 12px;
+  color: #fff;
+  background: #262936;
+  border: 1px solid #33374a;
+  border-radius: 6px;
+  outline: none;
+  cursor: pointer;
+}
+.widget-add-select:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.panel-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #7ee2a8;
+}
+.panel-dot.off { background: #e74c3c; }
+.panel-icon-btn {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: #9aa0b0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.panel-icon-btn:hover { background: #363a4a; color: #fff; }
+.panel-icon-btn:disabled { opacity: .4; cursor: not-allowed; }
+.panel-icon-btn.del { color: #ff9d8f; }
+.panel-icon-btn.del:hover { background: rgba(231, 76, 60, .2); color: #fff; }
+.panel-icon-btn.locked { color: #ffd76a; }
+.panel-icon-btn.locked:hover { background: rgba(255, 215, 106, .18); color: #ffe9a8; }
+.panel-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 13px;
+  color: #fff;
+  background: #17181f;
+  border: 1px solid #3b5bdb;
+  border-radius: 5px;
+  outline: none;
+}
 
 /* 节点面板：圆角矩形 */
 .node-panel {
@@ -164,6 +349,26 @@ body {
 .node-panel.stale {
   border-color: rgba(231, 76, 60, .7);
   box-shadow: 0 0 0 1px rgba(231,76,60,.4), 0 8px 24px rgba(0,0,0,.35);
+}
+/* 主舞台虚拟画布：2560×1440 按窗口等比缩放（app.js STAGE_W/STAGE_H，与 db.js 一致） */
+.stage {
+  position: relative;
+  flex: none;
+  border: 1px dashed rgba(255, 255, 255, .08);
+  border-radius: 14px;
+  background:
+    radial-gradient(900px 600px at 30% 20%, rgba(255, 255, 255, .03), transparent 60%);
+  box-shadow: inset 0 0 80px rgba(0, 0, 0, .22);
+}
+/* 节点小面板：绝对定位，x/y/w/h 由后端保存、按舞台缩放系数渲染 */
+.node-panel.widget {
+  position: absolute;
+}
+.node-panel.widget.editable { cursor: grab; }
+.node-panel.widget.editable:hover { border-color: rgba(157, 177, 248, .5); }
+.node-panel.widget.dragging {
+  cursor: grabbing;
+  box-shadow: 0 0 0 2px rgba(157, 177, 248, .5), 0 8px 24px rgba(0, 0, 0, .35);
 }
 /* 右下角拖拽调整大小的手柄（双线角标） */
 .node-panel .resize-handle {
@@ -190,6 +395,20 @@ body {
   border-bottom: 2px solid #9db1f8;
 }
 .node-panel .resize-handle:hover { opacity: 1; }
+.widget-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #8a90a2;
+  font-size: 15px;
+  text-align: center;
+  pointer-events: none;
+}
+.widget-empty .sub { font-size: 12px; opacity: .8; }
 .node-name {
   font-size: 15px;
   font-weight: 600;
