@@ -36,7 +36,8 @@ createApp({
       tab: 'main',
       nodes: [],                 // 全部节点（订阅页信息列表用）
       panels: [],                // 主页面节点面板（一个订阅主题 = 一个面板）
-      settings: { background: null, lock_all: false },
+      settings: { lock_all: false },
+      sideRailCollapsed: false,  // 主页面右侧边栏折叠状态（默认展开）
       drag: null,                // 拖拽状态
       pollTimer: null,
       refreshing: false,
@@ -64,16 +65,6 @@ createApp({
         byGateway.get(n.gateway_id).nodes.push(n);
       }
       return groups;
-    },
-    stageStyle() {
-      if (this.settings.background) {
-        return {
-          backgroundImage: `url(${this.settings.background})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        };
-      }
-      return {};
     },
   },
 
@@ -125,7 +116,8 @@ createApp({
         newTopicName: '',   // 瞬态：待添加主题的节点名字
         newTopicType: 'thermo', // 瞬态：待添加主题的类型
         saving: false,      // 瞬态：保存中标记
-        showConfig: false,  // 瞬态：服务器配置折叠状态（默认收起，节点区始终可见）
+        showConfig: false,  // 瞬态：服务器配置折叠状态（默认收起）
+        showNodes: false,   // 瞬态：节点列表折叠状态（默认收起，可展开）
       };
     },
     async refreshMqtt() {
@@ -180,11 +172,13 @@ createApp({
         const newTopicName = conn.newTopicName;
         const newTopicType = conn.newTopicType;
         const showConfig = conn.showConfig;
+        const showNodes = conn.showNodes;
         Object.assign(conn, this.normalizeConn(updated));
         conn.newTopic = newTopic;
         conn.newTopicName = newTopicName;
         conn.newTopicType = newTopicType;
         conn.showConfig = showConfig;
+        conn.showNodes = showNodes;
       } catch (e) {
         alert('保存连接失败：' + e.message);
       } finally {
@@ -387,7 +381,7 @@ createApp({
       } catch (e) { console.warn('保存面板布局失败', e); }
     },
 
-    // ---------- 锁定 / 背景 ----------
+    // ---------- 锁定 ----------
     async toggleLock() {
       const next = !this.settings.lock_all;
       try {
@@ -397,30 +391,6 @@ createApp({
           body: JSON.stringify({ lock_all: next }),
         });
       } catch (e) { console.warn('保存锁定状态失败', e); }
-    },
-
-    async uploadBackground(event) {
-      const file = event.target.files[0];
-      event.target.value = '';
-      if (!file) return;
-      const form = new FormData();
-      form.append('file', file);
-      try {
-        const res = await this.api('/api/settings/background', { method: 'POST', body: form });
-        this.settings.background = res.background;
-      } catch (e) {
-        alert('背景图上传失败：' + e.message);
-      }
-    },
-
-    async removeBackground() {
-      try {
-        this.settings = await this.api('/api/settings', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ background: null }),
-        });
-      } catch (e) { console.warn('移除背景失败', e); }
     },
 
     // ---------- 格式化 ----------

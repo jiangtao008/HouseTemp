@@ -8,7 +8,7 @@
 
 - 订阅配置的 MQTT 主题（支持 `+`/`#` 通配符），将温湿度/电池/信号落库（SQLite）
 - Web 两个 Tab：
-  - **主页面**：默认页，以可自由拖动的**圆角矩形面板**展示所有已订阅节点的最新信息（设备名、温度、湿度、电池、信号）；支持自定义背景图片；支持「锁定全部」防止误拖。面板位置/大小以**像素**保存在 2560×1440 的固定虚拟舞台上，窗口缩放不会压缩面板；窗口小于画布时页面滚动查看
+  - **主页面**：默认页，以可自由拖动的**圆角矩形面板**展示所有已订阅节点的最新信息（设备名、温度、湿度、电池、信号）；支持「锁定全部」防止误拖。面板位置/大小以**像素**保存在 2560×1440 的固定虚拟舞台上，窗口缩放不会压缩面板；窗口小于画布时页面滚动查看
   - **订阅页面**：每个 **MQTT 连接**以同级别卡片平铺展示，卡片内含服务器配置与**该连接上报的节点**（可勾选订阅、改名）；顶部「＋ 添加服务器」新增连接，每条连接独立启用/停用、独立订阅主题列表，保存后自动重连
 - 数据 10 秒轮询刷新（节点约 5 分钟一报，足够实时）
 - 默认 MQTT 服务为本地 `127.0.0.1:1883`（与 Mosquitto 同机部署开箱即用）
@@ -30,7 +30,6 @@ service/
 ├── mqtt.js                           # MQTT 连接管理器（多条连接、订阅、解析校验、落库）
 ├── routes/                           # nodes / telemetry / layout / settings / status
 ├── public/                           # Vue 单页（index.html + app.js + style.css）
-│   └── uploads/                      # 用户上传的背景图片（git 忽略）
 ├── data/                             # SQLite 数据库（运行时创建，git 忽略）
 └── deploy/thermo-service.service     # Debian systemd 单元示例
 ```
@@ -136,9 +135,8 @@ journalctl -u thermo-service -f                  # 查看日志
 | PUT | `/api/layout/{gatewayId}/{deviceId}` | 保存面板位置 `{"x":..,"y":..,"w":..,"h":..}`（遗留，%） |
 | GET | `/api/panels` | 主页面节点面板（一个订阅主题 = 一个面板，含最新温湿度与像素坐标） |
 | PUT | `/api/panels/{id}` | 保存面板像素坐标 `{"x","y","w","h"}`（单位 px，2560×1440 舞台，w≥120、h≥90） |
-| GET | `/api/settings` | 背景图、锁定状态 |
-| PUT | `/api/settings` | 更新锁定状态 / 背景 |
-| POST | `/api/background` | multipart 上传背景图片 |
+| GET | `/api/settings` | 锁定状态 |
+| PUT | `/api/settings` | 更新锁定状态 `{"lock_all":true}` |
 | GET | `/api/status` | MQTT 连接、运行时间、节点数 |
 | GET | `/api/mqtt` | 全部 MQTT 连接（每条含状态，不回传明文密码） |
 | POST | `/api/mqtt` | 新建连接 `{"name","host","port","username?","password?","topics?","enabled?"}`，`topics` 为主题数组或逗号/换行分隔字符串 |

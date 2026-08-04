@@ -27,6 +27,9 @@ function nodeToJson(row) {
     device_id: deviceId,
     connection_id: row.connection_id ?? null,
     device_type: row.device_type || '',
+    // 节点对应消息 Topic：标准格式 gateway_<gw>/node_<id>/<type> 可由身份还原；
+    // 旧格式/任意主题上报的节点无 device_type，无法还原则返回空串
+    topic: row.device_type ? `gateway_${gatewayId}/node_${deviceId}/${row.device_type}` : '',
     name,
     display_name: display,
     effective_name: effective,

@@ -13,9 +13,5 @@
   "server": {
     "host": "0.0.0.0",
     "port": 8000
-  },
-  "storage": {
-    "upload_dir": "public/uploads",
-    "max_upload_mb": 10
   }
 }

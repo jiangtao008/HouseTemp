@@ -38,7 +38,6 @@ body {
   background: #3b5bdb;
   color: #fff;
 }
-.tabbar-spacer { flex: 1; }
 
 .btn {
   padding: 7px 14px;
@@ -51,7 +50,6 @@ body {
   transition: background .15s;
 }
 .btn:hover { background: #363a4a; }
-.btn-lock.locked { background: #c0392b; color: #fff; }
 
 /* ---------- 主页面 ---------- */
 .main-stage {
@@ -83,6 +81,66 @@ body {
   backdrop-filter: blur(6px);
 }
 .stage-hint { font-size: 12px; color: #8a90a2; margin-left: 6px; }
+
+/* 主页面布局：舞台 + 右侧边栏 */
+.main-page {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  position: relative;
+  min-width: 0;
+}
+
+/* 右侧边栏（固定贴屏幕右缘，始终可见，可收起/展开） */
+.side-rail {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px;
+  background: #1d1f27;
+  border-left: 1px solid #2b2e3a;
+  box-shadow: -6px 0 20px rgba(0, 0, 0, .35);
+  z-index: 60;
+  transition: width .18s ease;
+}
+.side-rail.collapsed {
+  width: 46px;
+  padding: 12px 8px;
+  align-items: center;
+}
+.rail-toggle {
+  flex: none;
+  align-self: flex-start;   /* 展开时贴在边栏左缘（靠向舞台） */
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: #2c2f3c;
+  color: #cfd3de;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+}
+.rail-toggle:hover { background: #363a4a; }
+.side-rail.collapsed .rail-toggle { align-self: center; }
+.rail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+}
+.rail-btn.locked { background: #c0392b; color: #fff; }
+.rail-btn.locked:hover { background: #d64537; }
 
 /* 节点面板：圆角矩形 */
 .node-panel {
@@ -179,8 +237,6 @@ body {
   padding: 32px 0;
 }
 
-.hidden-input { display: none; }
-
 /* ---------- 订阅页面 ---------- */
 .subs-page {
   flex: 1;
@@ -233,6 +289,7 @@ body {
 }
 .name-input:focus { border-color: #3b5bdb; }
 .row-sub { margin-top: 4px; font-size: 12px; color: #8a90a2; }
+.node-topic { color: #6b7080; word-break: break-all; }
 .gw-tag {
   margin-left: 6px;
   padding: 1px 6px;
@@ -316,6 +373,9 @@ body {
 }
 .mqtt-field input:focus { border-color: #3b5bdb; }
 .mqtt-field.mqtt-topics { grid-column: 1 / -1; }   /* 主题列表独占一整行 */
+.mqtt-pwd-row { display: flex; gap: 8px; }         /* 保存按钮紧贴密码输入框右侧 */
+.mqtt-pwd-row input { flex: 1; min-width: 0; }
+.mqtt-pwd-row .btn { flex-shrink: 0; white-space: nowrap; }
 .topic-list {
   display: flex;
   flex-direction: column;
@@ -324,7 +384,7 @@ body {
   border: 1px solid #33374a;
   border-radius: 8px;
   padding: 8px;
-  max-height: 180px;
+  max-height: 300px;
   overflow-y: auto;
 }
 .topic-empty { font-size: 13px; color: #6b7080; padding: 4px 2px; }
@@ -413,12 +473,29 @@ body {
   align-items: baseline;
   gap: 8px;
   padding: 0 2px 2px;
+  cursor: pointer;
+  user-select: none;
 }
 .conn-nodes-title {
   font-size: 13px;
   font-weight: 600;
   color: #adb5bd;
 }
+.conn-nodes-body { display: flex; flex-direction: column; gap: 8px; }
+.conn-nodes-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #6b7080;
+  white-space: nowrap;
+}
+.conn-nodes-caret {
+  font-size: 18px;
+  line-height: 1;
+}
+.conn-nodes-head:hover .conn-nodes-toggle { color: #adb5bd; }
 .unassigned-block { margin-top: 14px; }
 .mqtt-conn-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .mqtt-conn-name {

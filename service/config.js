@@ -1,5 +1,5 @@
 /* 配置加载：优先读取 config.json，缺失时回退到 config.example.json 的默认值。
- * 数据库与上传目录的相对路径解析为 service/ 下的绝对路径。 */
+ * 数据库目录的相对路径解析为 service/ 下的绝对路径。 */
 const fs = require('fs');
 const path = require('path');
 
@@ -11,7 +11,6 @@ const DEFAULTS = {
   mqtt: { host: '127.0.0.1', port: 1883, username: '', password: '', topics: [] },
   database: { path: 'data/thermo.db', retention_days: 30 },
   server: { host: '0.0.0.0', port: 8000 },
-  storage: { upload_dir: 'public/uploads', max_upload_mb: 10 },
 };
 
 function deepMerge(base, extra) {
@@ -36,7 +35,6 @@ function load() {
   }
   const cfg = deepMerge(JSON.parse(JSON.stringify(DEFAULTS)), user);
   cfg.database.path = abs(cfg.database.path);
-  cfg.storage.upload_dir = abs(cfg.storage.upload_dir);
   _cached = cfg;
   return cfg;
 }

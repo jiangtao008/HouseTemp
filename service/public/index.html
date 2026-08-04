@@ -12,50 +12,56 @@
     <header class="tabbar">
       <button class="tab" :class="{ active: tab === 'main' }" @click="switchTab('main')">主页面</button>
       <button class="tab" :class="{ active: tab === 'subs' }" @click="switchTab('subs')">订阅页面</button>
-      <div class="tabbar-spacer"></div>
-      <button class="btn btn-lock" :class="{ locked: settings.lock_all }" @click="toggleLock">
-        <span class="lock-icon">{{ settings.lock_all ? '🔒' : '🔓' }}</span>
-        {{ settings.lock_all ? '已锁定' : '锁定全部' }}
-      </button>
     </header>
 
     <!-- 主页面 -->
-    <main v-show="tab === 'main'" class="main-stage" :style="stageStyle">
-      <!-- 主页面工具栏 -->
-      <div class="stage-toolbar">
-        <button class="btn" @click="$refs.bgInput.click()">🖼 设置背景图</button>
-        <button v-if="settings.background" class="btn" @click="removeBackground">移除背景</button>
-        <span class="stage-hint">拖动面板可调整位置，右下角手柄可调整大小；面板按像素固定，窗口小于画布时滚动查看{{ settings.lock_all ? '（当前已锁定）' : '' }}</span>
+    <main v-show="tab === 'main'" class="main-page">
+      <div class="main-stage">
+        <!-- 主页面工具栏 -->
+        <div class="stage-toolbar">
+          <span class="stage-hint">拖动面板可调整位置，右下角手柄可调整大小；面板按像素固定，窗口小于画布时滚动查看{{ settings.lock_all ? '（当前已锁定）' : '' }}</span>
+        </div>
+
+        <!-- 节点面板（与订阅主题一一对应） -->
+        <div v-for="(panel, i) in panels" :key="panel.id"
+             class="node-panel" :class="{ stale: panel.stale }"
+             :style="panelStyle(panel, i)"
+             @pointerdown="startDrag($event, panel)"
+             @pointermove="onDrag($event, panel)"
+             @pointerup="endDrag($event, panel)"
+             @pointercancel="endDrag($event, panel)">
+          <div class="node-name">{{ panel.name || panel.topic }}</div>
+          <template v-if="panel.type === 'thermo'">
+            <div class="node-temp">{{ fmtTemp(panel.temperature) }}</div>
+            <div class="node-row">💧 湿度 {{ panel.humidity != null ? panel.humidity + ' %' : '--' }}</div>
+            <div class="node-row">🔋 电池 {{ batteryText(panel) }}</div>
+            <div class="node-row sub" v-if="panel.rssi != null">信号 {{ panel.rssi }} dBm</div>
+          </template>
+          <div v-else class="node-row sub">该面板类型待支持（{{ panel.type }}）</div>
+          <div v-if="panel.stale" class="stale-badge">离线</div>
+          <div v-if="!settings.lock_all" class="resize-handle" title="拖动调整大小"></div>
+        </div>
+
+        <div v-if="panels.length === 0" class="empty-hint">
+          <p>暂无配置的面板</p>
+          <p class="sub">请到「订阅页面」为订阅主题配置节点名字与类型</p>
+        </div>
       </div>
 
-      <!-- 节点面板（与订阅主题一一对应） -->
-      <div v-for="(panel, i) in panels" :key="panel.id"
-           class="node-panel" :class="{ stale: panel.stale }"
-           :style="panelStyle(panel, i)"
-           @pointerdown="startDrag($event, panel)"
-           @pointermove="onDrag($event, panel)"
-           @pointerup="endDrag($event, panel)"
-           @pointercancel="endDrag($event, panel)">
-        <div class="node-name">{{ panel.name || panel.topic }}</div>
-        <template v-if="panel.type === 'thermo'">
-          <div class="node-temp">{{ fmtTemp(panel.temperature) }}</div>
-          <div class="node-row">💧 湿度 {{ panel.humidity != null ? panel.humidity + ' %' : '--' }}</div>
-          <div class="node-row">🔋 电池 {{ batteryText(panel) }}</div>
-          <div class="node-row sub" v-if="panel.rssi != null">信号 {{ panel.rssi }} dBm</div>
+      <!-- 右侧边栏（可收起/展开） -->
+      <aside class="side-rail" :class="{ collapsed: sideRailCollapsed }">
+        <button class="rail-toggle" @click="sideRailCollapsed = !sideRailCollapsed"
+                :title="sideRailCollapsed ? '展开侧边栏' : '收起侧边栏'">
+          {{ sideRailCollapsed ? '◀' : '▶' }}
+        </button>
+        <template v-if="!sideRailCollapsed">
+          <button class="btn rail-btn" :class="{ locked: settings.lock_all }" @click="toggleLock">
+            <span class="lock-icon">{{ settings.lock_all ? '🔒' : '🔓' }}</span>
+            {{ settings.lock_all ? '已锁定' : '锁定全部' }}
+          </button>
+          <button class="btn rail-btn" title="功能待添加">＋ 添加矩形</button>
         </template>
-        <div v-else class="node-row sub">该面板类型待支持（{{ panel.type }}）</div>
-        <div v-if="panel.stale" class="stale-badge">离线</div>
-        <div v-if="!settings.lock_all" class="resize-handle" title="拖动调整大小"></div>
-      </div>
-
-      <div v-if="panels.length === 0" class="empty-hint">
-        <p>暂无配置的面板</p>
-        <p class="sub">请到「订阅页面」为订阅主题配置节点名字与类型</p>
-      </div>
-
-      <!-- 隐藏的背景图上传 -->
-      <input type="file" ref="bgInput" accept="image/*" class="hidden-input"
-             @change="uploadBackground($event)">
+      </aside>
     </main>
 
     <!-- 订阅页面 -->
@@ -84,7 +90,7 @@
             <span class="conn-badge" :class="conn.connected ? 'ok' : 'err'">
               {{ conn.connected ? '已连接' : '未连接' }}
             </span>
-            <span class="conn-count">节点数 {{ nodesForConn(conn.id).length }}</span>
+            <span class="conn-count">Topic数 {{ conn.topics.length }}</span>
             <span v-if="!conn.connected && conn.last_error" class="conn-err" :title="conn.last_error">
               {{ conn.last_error }}
             </span>
@@ -109,10 +115,15 @@
                 <label>用户名</label>
                 <input v-model="conn.username" placeholder="可选，留空匿名">
               </div>
-              <div class="mqtt-field">
+              <div class="mqtt-field mqtt-pwd-field">
                 <label>密码</label>
-                <input v-model="conn.password" type="password"
-                       :placeholder="conn.password_set ? '已设置，留空保持不变' : '可选，留空匿名'">
+                <div class="mqtt-pwd-row">
+                  <input v-model="conn.password" type="password"
+                         :placeholder="conn.password_set ? '已设置，留空保持不变' : '可选，留空匿名'">
+                  <button class="btn primary save-conn" @click="saveMqttConn(conn)" :disabled="conn.saving">
+                    {{ conn.saving ? '保存中…' : '保存并重连' }}
+                  </button>
+                </div>
               </div>
               <div class="mqtt-field mqtt-topics">
                 <label>订阅主题（Topic）</label>
@@ -140,35 +151,41 @@
                 </div>
               </div>
             </div>
-            <div class="mqtt-actions">
-              <button class="btn primary" @click="saveMqttConn(conn)" :disabled="conn.saving">
-                {{ conn.saving ? '保存中…' : '保存并重连' }}
-              </button>
-              <button v-if="conn.password_set" class="btn" @click="clearMqttPassword(conn)">清除密码</button>
+            <div class="mqtt-actions" v-if="conn.password_set">
+              <button class="btn" @click="clearMqttPassword(conn)">清除密码</button>
             </div>
           </div>
 
-          <!-- 该连接上报的节点 -->
+          <!-- 该连接上报的节点（可折叠） -->
           <div class="conn-nodes">
-            <div class="conn-nodes-head">
+            <div class="conn-nodes-head" @click="conn.showNodes = !conn.showNodes" title="点击收起/展开">
               <span class="conn-nodes-title">节点</span>
               <span class="gw-count">{{ nodesForConn(conn.id).length }} 个</span>
+              <span class="conn-nodes-toggle">
+                <span>{{ conn.showNodes ? '折叠' : '展开' }}</span>
+                <span class="conn-nodes-caret">{{ conn.showNodes ? '▴' : '▾' }}</span>
+              </span>
             </div>
-            <div v-if="nodesForConn(conn.id).length === 0" class="topic-empty">
-              该连接尚未上报任何节点，节点上报后会自动出现在这里
-            </div>
-            <div v-for="node in nodesForConn(conn.id)" :key="nodeKey(node)" class="node-row-item">
-              <div class="row-main">
-                <div class="node-name-text">{{ node.effective_name }}</div>
-                <div class="row-sub">
-                  <span class="mono">#{{ node.device_id }}</span>
-                  <span class="type-badge" v-if="node.device_type">{{ node.device_type }}</span>
-                  <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '--' }}</span>
-                  <span v-if="node.stale" class="warn"> · 离线</span>
-                </div>
+            <div v-show="conn.showNodes" class="conn-nodes-body">
+              <div v-if="nodesForConn(conn.id).length === 0" class="topic-empty">
+                该连接尚未上报任何节点，节点上报后会自动出现在这里
               </div>
-              <div class="row-time" :title="node.last_seen || ''">
-                {{ node.last_seen ? fmtSeen(node.last_seen) : '--' }}
+              <div v-for="node in nodesForConn(conn.id)" :key="nodeKey(node)" class="node-row-item">
+                <div class="row-main">
+                  <div class="node-name-text">{{ node.effective_name }}</div>
+                  <div class="row-sub">
+                    <span class="mono">#{{ node.device_id }}</span>
+                    <span class="type-badge" v-if="node.device_type">{{ node.device_type }}</span>
+                    <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '--' }}</span>
+                    <span v-if="node.stale" class="warn"> · 离线</span>
+                  </div>
+                  <div class="row-sub" v-if="node.topic">
+                    <span class="mono node-topic" :title="node.topic">{{ node.topic }}</span>
+                  </div>
+                </div>
+                <div class="row-time" :title="node.last_seen || ''">
+                  {{ node.last_seen ? fmtSeen(node.last_seen) : '--' }}
+                </div>
               </div>
             </div>
           </div>
@@ -195,6 +212,9 @@
                   <span class="type-badge" v-if="node.device_type">{{ node.device_type }}</span>
                   <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '--' }}</span>
                   <span v-if="node.stale" class="warn"> · 离线</span>
+                </div>
+                <div class="row-sub" v-if="node.topic">
+                  <span class="mono node-topic" :title="node.topic">{{ node.topic }}</span>
                 </div>
               </div>
               <div class="row-time" :title="node.last_seen || ''">

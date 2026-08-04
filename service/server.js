@@ -40,15 +40,11 @@ app.use('/api/settings', settingsRouter.router);
 app.use('/api/status', statusRouter);
 app.use('/api/mqtt', mqttRouter);
 
-// 静态资源：背景图 + Vue 单页
-app.use('/uploads', express.static(cfg.storage.upload_dir));
+// 静态资源：Vue 单页
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 统一错误处理（multer 上传、JSON 解析等）
+// 统一错误处理（JSON 解析等）
 app.use((err, _req, res, _next) => {
-  if (err && err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(413).json({ detail: `图片超过 ${cfg.storage.max_upload_mb}MB 限制` });
-  }
   if (err && err.type === 'entity.parse.failed') {
     return res.status(400).json({ detail: '请求体不是合法 JSON' });
   }
