@@ -14,6 +14,7 @@ const STAGE_H = 1440;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS nodes (
+    user_id         INTEGER NOT NULL,           -- 归属用户（多用户隔离）
     gateway_id      INTEGER NOT NULL,
     device_id       INTEGER NOT NULL,
     connection_id   INTEGER,            -- 最近一次上报该节点的 MQTT 连接 id（可空：连接已删 / 迁移旧数据）
@@ -27,11 +28,12 @@ CREATE TABLE IF NOT EXISTS nodes (
     last_battery    REAL,
     last_rssi       INTEGER,
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (gateway_id, device_id)
+    PRIMARY KEY (user_id, gateway_id, device_id)
 );
 
 CREATE TABLE IF NOT EXISTS telemetry (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
     gateway_id  INTEGER NOT NULL,
     node_id     INTEGER NOT NULL,
     temperature REAL,
@@ -39,11 +41,12 @@ CREATE TABLE IF NOT EXISTS telemetry (
     battery     REAL,
     rssi        INTEGER,
     received_at TEXT NOT NULL,
-    FOREIGN KEY (gateway_id, node_id) REFERENCES nodes(gateway_id, device_id) ON DELETE CASCADE
+    FOREIGN KEY (user_id, gateway_id, node_id) REFERENCES nodes(user_id, gateway_id, device_id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_telemetry_gateway_node_time ON telemetry(gateway_id, node_id, received_at);
+CREATE INDEX IF NOT EXISTS idx_telemetry_user_gateway_node_time ON telemetry(user_id, gateway_id, node_id, received_at);
 
 CREATE TABLE IF NOT EXISTS panel_layouts (
+    user_id    INTEGER NOT NULL,
     gateway_id INTEGER NOT NULL,
     node_id    INTEGER NOT NULL,
     x          REAL NOT NULL DEFAULT 10,
@@ -51,7 +54,7 @@ CREATE TABLE IF NOT EXISTS panel_layouts (
     w          REAL NOT NULL DEFAULT 20,
     h          REAL NOT NULL DEFAULT 25,
     updated_at TEXT,
-    PRIMARY KEY (gateway_id, node_id)
+    PRIMARY KEY (user_id, gateway_id, node_id)
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -59,8 +62,31 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,   -- 用户名不区分大小写唯一
+    password_hash TEXT    NOT NULL,                          -- scrypt 哈希，存 salt:hash
+    role          TEXT    NOT NULL DEFAULT 'user',           -- 'admin' | 'user'
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token        TEXT PRIMARY KEY,            -- 登录 token（长期有效，退出/删用户时删除）
+    user_id      INTEGER NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    last_used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id INTEGER NOT NULL,
+    key     TEXT    NOT NULL,
+    value   TEXT,
+    PRIMARY KEY (user_id, key)
+);
+
 CREATE TABLE IF NOT EXISTS mqtt_connections (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
     name       TEXT    NOT NULL,
     host       TEXT    NOT NULL,
     port       INTEGER NOT NULL,
@@ -74,6 +100,7 @@ CREATE TABLE IF NOT EXISTS mqtt_connections (
 
 CREATE TABLE IF NOT EXISTS panels (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL,
     name       TEXT    NOT NULL DEFAULT '未命名面板',
     locked     INTEGER NOT NULL DEFAULT 0,      -- 1=锁定：禁止改名/删除/增删小面板
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -81,6 +108,7 @@ CREATE TABLE IF NOT EXISTS panels (
 
 CREATE TABLE IF NOT EXISTS topic_panels (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL,
     panel_id      INTEGER NOT NULL,             -- 所属面板（容器，见 panels 表）
     connection_id INTEGER,                      -- 绑定节点的来源连接（可为空：未绑定主题的占位）
     topic         TEXT,                         -- 绑定节点的订阅主题（可为空）
@@ -107,6 +135,30 @@ const DEFAULT_SETTINGS = { background: '', lock_all: '0' };
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+/** 多用户迁移（幂等）：按"旧数据不迁移"决策——丢弃旧库全部节点/历史/面板/MQTT 连接/布局数据，
+ * 重建带 user_id 的新 schema；全新库（无旧表）等价于直接建表。
+ * 以 nodes 表是否已含 user_id 列判断（列存在性，不依赖 settings 表，兼容首次迁移前无 settings 表的情况）。
+ * 须在 init() 最早执行，保证后续旧迁移均为 no-op。 */
+function migrateUsersScope() {
+  const cols = db.prepare('PRAGMA table_info(nodes)').all();
+  if (cols.some((c) => c.name === 'user_id')) return;   // 已迁移
+  db.exec('BEGIN');
+  try {
+    for (const t of ['topic_panels', 'panels', 'mqtt_connections', 'panel_layouts', 'telemetry', 'nodes']) {
+      db.exec(`DROP TABLE IF EXISTS ${t}`);
+    }
+    db.exec(SCHEMA);   // 重建带 user_id 的新表
+    setSetting('users_scope_v1', '1');
+    // 新 schema 已是最终形态（panel_id/可空 connection/像素坐标等均已含），打上遗留迁移标记使其 no-op
+    for (const k of ['layout_px', 'topic_panels_nullable', 'panels_containers_v1']) setSetting(k, '1');
+    db.exec('COMMIT');
+    console.log('已迁移到多用户模型：旧节点/面板/MQTT/历史数据已清空，用户配置从零开始');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
 }
 
 /** 旧库（nodes 只有 device_id 主键）迁移到复合身份；全新库无需迁移。 */
@@ -230,6 +282,11 @@ function migrateTopicPanelsNullable() {
 function migratePanelContainers() {
   const done = db.prepare("SELECT 1 FROM settings WHERE key = 'panels_containers_v1'").get();
   if (done) return;
+  const panelCols = db.prepare('PRAGMA table_info(panels)').all();
+  if (panelCols.some((c) => c.name === 'user_id')) {
+    setSetting('panels_containers_v1', '1');   // 新 schema 已含 panel_id/user_id，无需旧迁移
+    return;
+  }
   db.exec('BEGIN');
   try {
     db.exec(`CREATE TABLE IF NOT EXISTS panels (
@@ -331,6 +388,7 @@ function init(cfg) {
   db = new Database(cfg.database.path);
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');
+  migrateUsersScope();   // 最先：丢弃旧数据并重建带 user_id 的 schema
   migrateIfNeeded();
   db.exec(SCHEMA);
   const seed = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)');
@@ -341,60 +399,114 @@ function init(cfg) {
   migratePanelLocked();
   migrateWidgetChartFlags();
   migrateWidgetChartRange();
-  migrateMqttConnections(cfg);
 }
 
-/** MQTT 连接初始化：旧版扁平 settings 键（mqtt_host 等）迁移成一条"默认连接"，全新库则用 config.json 初始化。
- * 幂等：表里已有连接或已打过 mqtt_seeded 标记（用户曾删光所有连接）时不再重建。 */
-function migrateMqttConnections(cfg) {
-  const count = db.prepare('SELECT COUNT(*) AS n FROM mqtt_connections').get().n;
-  if (count > 0) return;
-  const seeded = db.prepare("SELECT 1 FROM settings WHERE key = 'mqtt_seeded'").get();
-  if (seeded) return;
+// ---------------------------------------------------------------------------
+// 用户 / 会话（多用户认证）
+// ---------------------------------------------------------------------------
 
-  const legacy = db.prepare("SELECT 1 FROM settings WHERE key = 'mqtt_host'").get();
-  let name, host, port, username, password, topics;
-  if (legacy) {
-    const s = getSettings();
-    name = '默认连接';
-    host = s.mqtt_host || cfg.mqtt.host || '127.0.0.1';
-    port = Number(s.mqtt_port) || cfg.mqtt.port || 1883;
-    username = s.mqtt_username || '';
-    password = s.mqtt_password || '';
-    topics = safeParseTopics(s.mqtt_topics);
-  } else {
-    name = '默认连接';
-    host = cfg.mqtt.host || '127.0.0.1';
-    port = Number(cfg.mqtt.port) || 1883;
-    username = cfg.mqtt.username || '';
-    password = cfg.mqtt.password || '';
-    topics = normalizeTopics(cfg.mqtt.topics);
-  }
+function createUser(username, passwordHash, role = 'user') {
+  const info = db.prepare('INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)')
+    .run(username, passwordHash, role, nowIso());
+  return getUserById(info.lastInsertRowid);
+}
 
-  db.exec('BEGIN');
-  try {
-    insertMqttConnection({ name, host, port, username, password, topics, enabled: true });
-    if (legacy) {
-      db.prepare(
-        "DELETE FROM settings WHERE key IN ('mqtt_host','mqtt_port','mqtt_username','mqtt_password','mqtt_topics')"
-      ).run();
-    }
-    setSetting('mqtt_seeded', '1');
-    db.exec('COMMIT');
-    console.log(legacy ? 'MQTT 旧配置已迁移到默认连接' : '已用 config.json 初始化默认 MQTT 连接');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
+function getUserByUsername(username) {
+  return db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username);
+}
+
+function getUserById(id) {
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+}
+
+function listUsers() {
+  return db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id').all();
+}
+
+function setUserPassword(id, hash) {
+  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id);
+  return getUserById(id);
+}
+
+function setUserRole(id, role) {
+  db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id);
+  return getUserById(id);
+}
+
+function countAdmins() {
+  return db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
+}
+
+/** 删除用户并显式级联清理其全部数据（FK 未强制开启，需手动删）。 */
+function deleteUser(id) {
+  db.prepare('DELETE FROM topic_panels WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM panels WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM nodes WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM telemetry WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM panel_layouts WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM mqtt_connections WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
+  db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(id);
+  return db.prepare('DELETE FROM users WHERE id = ?').run(id);
+}
+
+function createSession(token, userId) {
+  db.prepare('INSERT INTO sessions (token, user_id, last_used_at) VALUES (?, ?, ?)').run(token, userId, nowIso());
+}
+
+/** 会话 → 归属用户（JOIN users 取 username/role）。无有效会话返回 undefined。 */
+function getSession(token) {
+  return db.prepare(
+    `SELECT s.token, s.user_id, u.username, u.role FROM sessions s
+     JOIN users u ON u.id = s.user_id WHERE s.token = ?`
+  ).get(token);
+}
+
+function deleteSession(token) {
+  db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+}
+
+function touchSession(token) {
+  db.prepare('UPDATE sessions SET last_used_at = ? WHERE token = ?').run(nowIso(), token);
+}
+
+function getUserSetting(userId, key) {
+  const r = db.prepare('SELECT value FROM user_settings WHERE user_id = ? AND key = ?').get(userId, key);
+  return r ? r.value : undefined;
+}
+
+function setUserSetting(userId, key, value) {
+  db.prepare(
+    'INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?)' +
+    ' ON CONFLICT(user_id, key) DO UPDATE SET value=excluded.value'
+  ).run(userId, key, value);
+}
+
+/** 新用户注册时按 config.json 的 mqtt 段初始化一条「默认连接」（host 为空则不建），保持开箱即用。 */
+function seedDefaultConnection(userId, cfg) {
+  const host = String((cfg && cfg.mqtt && cfg.mqtt.host) || '').trim();
+  if (!host) return null;
+  const conn = insertMqttConnection({
+    userId,
+    name: '默认连接',
+    host,
+    port: Number(cfg.mqtt.port) || 1883,
+    username: cfg.mqtt.username || '',
+    password: cfg.mqtt.password || '',
+    topics: normalizeTopics(cfg.mqtt.topics),
+    enabled: true,
+  });
+  syncTopicPanels(conn.id, conn.topics);
+  return conn;
 }
 
 // ---------------------------------------------------------------------------
 // 节点
 // ---------------------------------------------------------------------------
 
-function listNodes({ subscribedOnly = false, gatewayId } = {}) {
-  const where = [];
-  const params = {};
+function listNodes({ userId, subscribedOnly = false, gatewayId } = {}) {
+  const where = ['user_id = @user_id'];
+  const params = { user_id: userId };
   if (subscribedOnly) where.push('subscribed = 1');
   if (gatewayId !== undefined) { where.push('gateway_id = @gateway_id'); params.gateway_id = gatewayId; }
   let sql = 'SELECT * FROM nodes';
@@ -403,31 +515,33 @@ function listNodes({ subscribedOnly = false, gatewayId } = {}) {
   return db.prepare(sql).all(params);
 }
 
-function getNode(gatewayId, deviceId) {
-  return db.prepare('SELECT * FROM nodes WHERE gateway_id = ? AND device_id = ?').get(gatewayId, deviceId);
+function getNode(userId, gatewayId, deviceId) {
+  return db.prepare('SELECT * FROM nodes WHERE user_id = ? AND gateway_id = ? AND device_id = ?')
+    .get(userId, gatewayId, deviceId);
 }
 
 /** 更新订阅状态和/或显示名。displayName 为 undefined 时不修改；null 表示清除覆盖。 */
-function updateNode(gatewayId, deviceId, { subscribed, displayName } = {}) {
+function updateNode(userId, gatewayId, deviceId, { subscribed, displayName } = {}) {
   const sets = [];
   const params = {};
   if (subscribed !== undefined) { sets.push('subscribed = @subscribed'); params.subscribed = subscribed ? 1 : 0; }
   if (displayName !== undefined) { sets.push('display_name = @display_name'); params.display_name = displayName; }
   if (!sets.length) return;
+  params.user_id = userId;
   params.gateway_id = gatewayId;
   params.device_id = deviceId;
-  db.prepare(`UPDATE nodes SET ${sets.join(', ')} WHERE gateway_id = @gateway_id AND device_id = @device_id`).run(params);
+  db.prepare(`UPDATE nodes SET ${sets.join(', ')} WHERE user_id = @user_id AND gateway_id = @gateway_id AND device_id = @device_id`).run(params);
 }
 
 // ---------------------------------------------------------------------------
 // 历史数据
 // ---------------------------------------------------------------------------
 
-function listTelemetry(gatewayId, deviceId, limit = 100) {
+function listTelemetry(userId, gatewayId, deviceId, limit = 100) {
   return db.prepare(
     'SELECT temperature, humidity, battery, rssi, received_at' +
-    ' FROM telemetry WHERE gateway_id = ? AND node_id = ? ORDER BY received_at DESC, id DESC LIMIT ?'
-  ).all(gatewayId, deviceId, limit);
+    ' FROM telemetry WHERE user_id = ? AND gateway_id = ? AND node_id = ? ORDER BY received_at DESC, id DESC LIMIT ?'
+  ).all(userId, gatewayId, deviceId, limit);
 }
 
 /** 删除超过保留天数的历史（cutoff 为 ISO 字符串，与存储格式一致可正确比较）。 */
@@ -441,38 +555,39 @@ function cleanupTelemetry(cutoffIso) {
 
 function upsertTelemetry(rec) {
   db.prepare(
-    'INSERT INTO nodes (gateway_id, device_id, connection_id, name, device_type, last_seen,' +
+    'INSERT INTO nodes (user_id, gateway_id, device_id, connection_id, name, device_type, last_seen,' +
     ' last_temperature, last_humidity, last_battery, last_rssi)' +
-    ' VALUES (@gateway_id, @id, @connection_id, @name, @device_type, @received_at, @temperature, @humidity, @battery, @rssi)' +
-    ' ON CONFLICT(gateway_id, device_id) DO UPDATE SET' +
+    ' VALUES (@user_id, @gateway_id, @id, @connection_id, @name, @device_type, @received_at, @temperature, @humidity, @battery, @rssi)' +
+    ' ON CONFLICT(user_id, gateway_id, device_id) DO UPDATE SET' +
     ' name=excluded.name, device_type=excluded.device_type, connection_id=excluded.connection_id,' +
     ' last_seen=excluded.last_seen,' +
     ' last_temperature=excluded.last_temperature, last_humidity=excluded.last_humidity,' +
     ' last_battery=excluded.last_battery, last_rssi=excluded.last_rssi'
   ).run(rec);
   db.prepare(
-    'INSERT INTO telemetry (gateway_id, node_id, temperature, humidity, battery, rssi, received_at)' +
-    ' VALUES (@gateway_id, @id, @temperature, @humidity, @battery, @rssi, @received_at)'
+    'INSERT INTO telemetry (user_id, gateway_id, node_id, temperature, humidity, battery, rssi, received_at)' +
+    ' VALUES (@user_id, @gateway_id, @id, @temperature, @humidity, @battery, @rssi, @received_at)'
   ).run(rec);
 }
 
 // ---------------------------------------------------------------------------
-// 面板布局
+// 面板布局（遗留路由，按用户隔离保持一致）
 // ---------------------------------------------------------------------------
 
-function getLayouts() {
-  return db.prepare('SELECT * FROM panel_layouts').all();
+function getLayouts(userId) {
+  return db.prepare('SELECT * FROM panel_layouts WHERE user_id = ?').all(userId);
 }
 
-function getLayout(gatewayId, deviceId) {
-  return db.prepare('SELECT * FROM panel_layouts WHERE gateway_id = ? AND node_id = ?').get(gatewayId, deviceId);
+function getLayout(userId, gatewayId, deviceId) {
+  return db.prepare('SELECT * FROM panel_layouts WHERE user_id = ? AND gateway_id = ? AND node_id = ?')
+    .get(userId, gatewayId, deviceId);
 }
 
-function upsertLayout(gatewayId, deviceId, x, y, w, h) {
+function upsertLayout(userId, gatewayId, deviceId, x, y, w, h) {
   db.prepare(
-    'INSERT INTO panel_layouts (gateway_id, node_id, x, y, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)' +
-    ' ON CONFLICT(gateway_id, node_id) DO UPDATE SET x=excluded.x, y=excluded.y, w=excluded.w, h=excluded.h, updated_at=excluded.updated_at'
-  ).run(gatewayId, deviceId, x, y, w, h, nowIso());
+    'INSERT INTO panel_layouts (user_id, gateway_id, node_id, x, y, w, h, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)' +
+    ' ON CONFLICT(user_id, gateway_id, node_id) DO UPDATE SET x=excluded.x, y=excluded.y, w=excluded.w, h=excluded.h, updated_at=excluded.updated_at'
+  ).run(userId, gatewayId, deviceId, x, y, w, h, nowIso());
 }
 
 // ---------------------------------------------------------------------------
@@ -545,12 +660,16 @@ function getMqttConnection(id) {
   return row ? rowToConn(row) : undefined;
 }
 
-function insertMqttConnection({ name, host, port, username = '', password = '', topics = [], enabled = true }) {
+function listUserMqttConnections(userId) {
+  return db.prepare('SELECT * FROM mqtt_connections WHERE user_id = ? ORDER BY id').all(userId).map(rowToConn);
+}
+
+function insertMqttConnection({ userId, name, host, port, username = '', password = '', topics = [], enabled = true }) {
   const now = nowIso();
   const info = db.prepare(
-    'INSERT INTO mqtt_connections (name, host, port, username, password, topics, enabled, created_at, updated_at)' +
-    ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(name, host, port, username, password, JSON.stringify(topics), enabled ? 1 : 0, now, now);
+    'INSERT INTO mqtt_connections (user_id, name, host, port, username, password, topics, enabled, created_at, updated_at)' +
+    ' VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(userId, name, host, port, username, password, JSON.stringify(topics), enabled ? 1 : 0, now, now);
   return getMqttConnection(info.lastInsertRowid);
 }
 
@@ -615,9 +734,11 @@ function deleteTopicPanelsForConnection(connectionId) {
   return db.prepare('DELETE FROM topic_panels WHERE connection_id = ?').run(connectionId);
 }
 
-/** 一条消息按主题通配符路由到该连接下所有命中节点小面板，更新其最新数据。 */
+/** 一条消息按主题通配符路由到该连接下所有命中节点小面板，更新其最新数据。
+ * 连接 id 全局唯一（天然按用户隔离），防御性再加 user_id 过滤。 */
 function routeMessageToPanels(rec, topic, connectionId) {
-  const panels = db.prepare('SELECT id, topic FROM topic_panels WHERE connection_id = ?').all(connectionId);
+  const panels = db.prepare('SELECT id, topic FROM topic_panels WHERE connection_id = ? AND user_id = ?')
+    .all(connectionId, rec.user_id);
   if (!panels.length) return;
   const stmt = db.prepare(
     'UPDATE topic_panels SET temperature = ?, humidity = ?, battery = ?, rssi = ?, last_seen = ? WHERE id = ?'
@@ -631,47 +752,47 @@ function routeMessageToPanels(rec, topic, connectionId) {
 
 const PANEL_STALE_AFTER_MS = 10 * 60 * 1000; // 超过 10 分钟未上报视为离线
 
-/** 全部面板容器。 */
-function listPanels() {
-  return db.prepare('SELECT id, name, locked FROM panels ORDER BY id').all();
+/** 全部面板容器（某用户）。 */
+function listPanels(userId) {
+  return db.prepare('SELECT id, name, locked FROM panels WHERE user_id = ? ORDER BY id').all(userId);
 }
 
-function getPanel(id) {
-  return db.prepare('SELECT * FROM panels WHERE id = ?').get(id);
+function getPanel(userId, id) {
+  return db.prepare('SELECT * FROM panels WHERE user_id = ? AND id = ?').get(userId, id);
 }
 
-function createPanel(name) {
-  const count = db.prepare('SELECT COUNT(*) AS n FROM panels').get().n;
-  const info = db.prepare('INSERT INTO panels (name, locked) VALUES (?, 0)')
-    .run((name && String(name).trim()) || `新面板 ${count + 1}`);
-  return getPanel(info.lastInsertRowid);
+function createPanel(userId, name) {
+  const count = db.prepare('SELECT COUNT(*) AS n FROM panels WHERE user_id = ?').get(userId).n;
+  const info = db.prepare('INSERT INTO panels (user_id, name, locked) VALUES (?, ?, 0)')
+    .run(userId, (name && String(name).trim()) || `新面板 ${count + 1}`);
+  return getPanel(userId, info.lastInsertRowid);
 }
 
 /** 部分更新面板：只写传入的字段（name 改名 / locked 锁定）。 */
-function updatePanel(id, { name, locked } = {}) {
+function updatePanel(userId, id, { name, locked } = {}) {
   const sets = [];
-  const params = { id };
+  const params = { user_id: userId, id };
   if (name !== undefined) { sets.push('name = @name'); params.name = String(name).trim().slice(0, 64); }
   if (locked !== undefined) { sets.push('locked = @locked'); params.locked = locked ? 1 : 0; }
-  if (!sets.length) return getPanel(id);
-  db.prepare(`UPDATE panels SET ${sets.join(', ')} WHERE id = @id`).run(params);
-  return getPanel(id);
+  if (!sets.length) return getPanel(userId, id);
+  db.prepare(`UPDATE panels SET ${sets.join(', ')} WHERE user_id = @user_id AND id = @id`).run(params);
+  return getPanel(userId, id);
 }
 
 /** 删除面板容器及其内全部节点小面板。 */
-function deletePanel(id) {
-  db.prepare('DELETE FROM topic_panels WHERE panel_id = ?').run(id);
-  return db.prepare('DELETE FROM panels WHERE id = ?').run(id);
+function deletePanel(userId, id) {
+  db.prepare('DELETE FROM topic_panels WHERE user_id = ? AND panel_id = ?').run(userId, id);
+  return db.prepare('DELETE FROM panels WHERE user_id = ? AND id = ?').run(userId, id);
 }
 
-/** 全部节点小面板（主页面数据源）：只列出已启用连接绑定的。 */
-function listWidgets() {
+/** 全部节点小面板（主页面数据源，某用户）：只列出已启用连接绑定的。 */
+function listWidgets(userId) {
   const rows = db.prepare(
     `SELECT p.* FROM topic_panels p
      LEFT JOIN mqtt_connections c ON c.id = p.connection_id
-     WHERE p.connection_id IS NULL OR c.enabled = 1
+     WHERE p.user_id = ? AND (p.connection_id IS NULL OR c.enabled = 1)
      ORDER BY p.panel_id, p.id`
-  ).all();
+  ).all(userId);
   return rows.map((r) => {
     let stale = false;
     if (r.last_seen) {
@@ -682,19 +803,19 @@ function listWidgets() {
   });
 }
 
-function getWidget(id) {
-  return db.prepare('SELECT * FROM topic_panels WHERE id = ?').get(id);
+function getWidget(userId, id) {
+  return db.prepare('SELECT * FROM topic_panels WHERE user_id = ? AND id = ?').get(userId, id);
 }
 
-function updateWidgetLayout(id, x, y, w, h) {
-  db.prepare('UPDATE topic_panels SET x = ?, y = ?, w = ?, h = ? WHERE id = ?').run(x, y, w, h, id);
-  return getWidget(id);
+function updateWidgetLayout(userId, id, x, y, w, h) {
+  db.prepare('UPDATE topic_panels SET x = ?, y = ?, w = ?, h = ? WHERE user_id = ? AND id = ?').run(x, y, w, h, userId, id);
+  return getWidget(userId, id);
 }
 
 /** 部分更新小面板图表设置（show_temp/show_hum/show_bat/chart_range，undefined 不修改）。 */
-function updateWidgetSettings(id, settings) {
+function updateWidgetSettings(userId, id, settings) {
   const sets = [];
-  const params = { id };
+  const params = { user_id: userId, id };
   for (const k of ['show_temp', 'show_hum', 'show_bat']) {
     if (settings[k] !== undefined) {
       sets.push(`${k} = @${k}`);
@@ -705,9 +826,9 @@ function updateWidgetSettings(id, settings) {
     sets.push('chart_range = @chart_range');
     params.chart_range = settings.chart_range;
   }
-  if (!sets.length) return getWidget(id);
-  db.prepare(`UPDATE topic_panels SET ${sets.join(', ')} WHERE id = @id`).run(params);
-  return getWidget(id);
+  if (!sets.length) return getWidget(userId, id);
+  db.prepare(`UPDATE topic_panels SET ${sets.join(', ')} WHERE user_id = @user_id AND id = @id`).run(params);
+  return getWidget(userId, id);
 }
 
 /** 小面板 → 命中的节点 (gateway_id, device_id) 列表（曲线历史数据用）：
@@ -718,11 +839,11 @@ function resolveWidgetNodeIds(w) {
   if (m) {
     const gid = Number(m[1]);
     const did = Number(m[2]);
-    if (getNode(gid, did)) out.push({ gateway_id: gid, device_id: did });
+    if (getNode(w.user_id, gid, did)) out.push({ gateway_id: gid, device_id: did });
     return out;
   }
-  const nodes = db.prepare('SELECT gateway_id, device_id, device_type FROM nodes WHERE connection_id = ?')
-    .all(w.connection_id);
+  const nodes = db.prepare('SELECT gateway_id, device_id, device_type FROM nodes WHERE connection_id = ? AND user_id = ?')
+    .all(w.connection_id, w.user_id);
   for (const n of nodes) {
     const t = `gateway_${n.gateway_id}/node_${n.device_id}/${n.device_type || 'thermo'}`;
     if (topicMatches(w.topic, t)) out.push({ gateway_id: n.gateway_id, device_id: n.device_id });
@@ -772,10 +893,10 @@ function listWidgetTelemetry(widget, opts = {}) {
   for (const n of ids) {
     const q = since
       ? 'SELECT temperature, humidity, battery, rssi, received_at' +
-        ' FROM telemetry WHERE gateway_id = ? AND node_id = ? AND received_at >= ?'
+        ' FROM telemetry WHERE user_id = ? AND gateway_id = ? AND node_id = ? AND received_at >= ?'
       : 'SELECT temperature, humidity, battery, rssi, received_at' +
-        ' FROM telemetry WHERE gateway_id = ? AND node_id = ?';
-    const params = since ? [n.gateway_id, n.device_id, since] : [n.gateway_id, n.device_id];
+        ' FROM telemetry WHERE user_id = ? AND gateway_id = ? AND node_id = ?';
+    const params = since ? [widget.user_id, n.gateway_id, n.device_id, since] : [widget.user_id, n.gateway_id, n.device_id];
     rows.push(...db.prepare(q).all(...params));
   }
   rows.sort((a, b) => (a.received_at < b.received_at ? -1 : a.received_at > b.received_at ? 1 : 0));
@@ -784,25 +905,25 @@ function listWidgetTelemetry(widget, opts = {}) {
 }
 
 /** 向某面板添加一个绑定订阅主题的节点小面板（同面板同主题去重）。 */
-function createWidget(panelId, node) {
+function createWidget(userId, panelId, node) {
   const exist = db.prepare(
-    'SELECT id FROM topic_panels WHERE panel_id = ? AND connection_id = ? AND topic = ?'
-  ).get(panelId, node.connection_id, node.topic);
-  if (exist) return getWidget(exist.id);
+    'SELECT id FROM topic_panels WHERE user_id = ? AND panel_id = ? AND connection_id = ? AND topic = ?'
+  ).get(userId, panelId, node.connection_id, node.topic);
+  if (exist) return getWidget(userId, exist.id);
   const info = db.prepare(
-    'INSERT INTO topic_panels (panel_id, connection_id, topic, name, type) VALUES (?, ?, ?, ?, ?)'
-  ).run(panelId, node.connection_id, node.topic, node.name || '', node.type || 'thermo');
-  return getWidget(info.lastInsertRowid);
+    'INSERT INTO topic_panels (user_id, panel_id, connection_id, topic, name, type) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(userId, panelId, node.connection_id, node.topic, node.name || '', node.type || 'thermo');
+  return getWidget(userId, info.lastInsertRowid);
 }
 
-function deleteWidget(id) {
-  return db.prepare('DELETE FROM topic_panels WHERE id = ?').run(id);
+function deleteWidget(userId, id) {
+  return db.prepare('DELETE FROM topic_panels WHERE user_id = ? AND id = ?').run(userId, id);
 }
 
-/** 可添加的节点（订阅主题池）：所有已启用连接的订阅主题，供「添加节点」下拉使用。 */
-function listAvailableNodes() {
+/** 可添加的节点（订阅主题池）：该用户所有已启用连接的订阅主题，供「添加节点」下拉使用。 */
+function listAvailableNodes(userId) {
   const nodes = [];
-  for (const conn of listMqttConnections()) {
+  for (const conn of listUserMqttConnections(userId)) {
     if (!conn.enabled) continue;
     for (const t of conn.topics) {
       nodes.push({
@@ -822,18 +943,39 @@ module.exports = {
   STAGE_W,
   STAGE_H,
   nowIso,
+  // 用户 / 会话
+  createUser,
+  getUserByUsername,
+  getUserById,
+  listUsers,
+  setUserPassword,
+  setUserRole,
+  countAdmins,
+  deleteUser,
+  createSession,
+  getSession,
+  deleteSession,
+  touchSession,
+  getUserSetting,
+  setUserSetting,
+  seedDefaultConnection,
+  // 节点
   listNodes,
   getNode,
   updateNode,
   listTelemetry,
   cleanupTelemetry,
   upsertTelemetry,
+  // 面板布局（遗留）
   getLayouts,
   getLayout,
   upsertLayout,
+  // 设置
   getSettings,
   setSetting,
+  // MQTT 连接
   listMqttConnections,
+  listUserMqttConnections,
   getMqttConnection,
   insertMqttConnection,
   updateMqttConnection,
@@ -841,6 +983,7 @@ module.exports = {
   syncTopicPanels,
   deleteTopicPanelsForConnection,
   routeMessageToPanels,
+  // 面板容器 + 节点小面板
   listPanels,
   getPanel,
   createPanel,

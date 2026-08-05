@@ -60,10 +60,12 @@ function validate(payload, topic, connectionId) {
   };
 }
 
-/** 共享消息处理：节点身份从主题/负载解析（与来自哪条连接无关），来源连接仅作记录。 */
-function onMessage(topic, payload, connectionId) {
+/** 共享消息处理：节点身份从主题/负载解析（与来自哪条连接无关），来源连接仅作记录。
+ * 多用户：消息归属该连接的用户（rec.user_id），落库/面板路由按用户隔离。 */
+function onMessage(topic, payload, connectionId, userId) {
   const rec = validate(payload, topic, connectionId);
   if (!rec) return;
+  rec.user_id = userId;
   try {
     db.upsertTelemetry(rec);
   } catch (err) {
@@ -77,10 +79,11 @@ function onMessage(topic, payload, connectionId) {
   }
 }
 
-/** 建立一条连接的客户端。连接缺失或已停用时 no-op；失败通过 'error' 事件上报，不抛异常。 */
+/** 建立一条连接的客户端。连接缺失/已停用/未归属用户时 no-op；失败通过 'error' 事件上报，不抛异常。 */
 function connect(id) {
   const row = db.getMqttConnection(id);
   if (!row || !row.enabled) return;
+  if (!row.user_id) return;   // 未归属任何用户（防御：不建立，避免写入无主数据）
   const url = `mqtt://${row.host}:${row.port}`;
   const opts = { clientId: `thermo-service-${id}`, clean: true, reconnectPeriod: 10000 };
   if (row.username) {
@@ -126,7 +129,7 @@ function connect(id) {
     entry.lastError = (err && err.message) || String(err);
     console.error(`MQTT 错误 [#${id} ${row.name}]:`, entry.lastError);
   });
-  c.on('message', (t, p) => onMessage(t, p, id));
+  c.on('message', (t, p) => onMessage(t, p, id, row.user_id));
 }
 
 /** 启动时按当前配置建立所有已启用的连接。 */

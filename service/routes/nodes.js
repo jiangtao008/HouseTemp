@@ -46,21 +46,21 @@ function nodeToJson(row) {
 router.get('/', (req, res) => {
   const subscribedOnly = req.query.subscribed === 'true';
   const gatewayId = req.query.gateway !== undefined ? Number(req.query.gateway) : undefined;
-  res.json(db.listNodes({ subscribedOnly, gatewayId }).map(nodeToJson));
+  res.json(db.listNodes({ userId: req.user.id, subscribedOnly, gatewayId }).map(nodeToJson));
 });
 
 router.put('/:gatewayId/:deviceId', (req, res) => {
   const gatewayId = Number(req.params.gatewayId);
   const deviceId = Number(req.params.deviceId);
-  const node = db.getNode(gatewayId, deviceId);
+  const node = db.getNode(req.user.id, gatewayId, deviceId);
   if (!node) return res.status(404).json({ detail: `节点 ${gatewayId}/${deviceId} 不存在` });
 
   const body = req.body || {};
   let displayName;
   if (Object.prototype.hasOwnProperty.call(body, 'display_name')) displayName = body.display_name;
-  db.updateNode(gatewayId, deviceId, { subscribed: body.subscribed, displayName });
+  db.updateNode(req.user.id, gatewayId, deviceId, { subscribed: body.subscribed, displayName });
 
-  res.json(nodeToJson(db.getNode(gatewayId, deviceId)));
+  res.json(nodeToJson(db.getNode(req.user.id, gatewayId, deviceId)));
 });
 
 module.exports = router;

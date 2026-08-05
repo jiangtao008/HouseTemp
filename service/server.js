@@ -7,6 +7,8 @@ const express = require('express');
 const config = require('./config');
 const db = require('./db');
 const mqttClient = require('./mqtt');
+const auth = require('./routes/auth');
+const usersRouter = require('./routes/users');
 const nodesRouter = require('./routes/nodes');
 const telemetryRouter = require('./routes/telemetry');
 const layoutRouter = require('./routes/layout');
@@ -17,8 +19,9 @@ const mqttRouter = require('./routes/mqtt');
 
 const cfg = config.load();
 
-// 初始化数据库
+// 初始化数据库 + 初始管理员（config.admin）
 db.init(cfg);
+auth.ensureAdmin(cfg);
 
 // 为既有连接补齐主题面板（新库无连接时 no-op；幂等，只影响配置/布局，不影响已有数据）
 for (const conn of db.listMqttConnections()) {
@@ -31,7 +34,14 @@ app.locals.startTime = Date.now();
 
 app.use(express.json());
 
-// API 路由
+// 认证路由（无需登录）：先于鉴权中间件挂载
+app.use('/api/auth', auth.router);
+
+// 其余所有 /api/* 需登录（Bearer token）
+app.use('/api', auth.requireAuth);
+
+// API 路由（均已在 requireAuth 之下，handler 从 req.user.id 取用户）
+app.use('/api/users', usersRouter);
 app.use('/api/nodes', nodesRouter);
 app.use('/api/telemetry', telemetryRouter);
 app.use('/api/layout', layoutRouter);

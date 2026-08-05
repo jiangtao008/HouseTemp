@@ -115,15 +115,20 @@ HTTP 侧与 MQTT 侧通过 `db.js` 共享同一份状态：消息落库后，Web
 
 ### 5.1 表结构
 
+所有业务数据表（`nodes`/`telemetry`/`panel_layouts`/`mqtt_connections`/`panels`/`topic_panels`）均带 **`user_id`** 做多用户隔离；用户登录后所有查询/写入都限定在自己的 `user_id` 范围内。
+
 | 表 | 作用 | 关键字段 / 约束 |
 |---|---|---|
-| `nodes` | 节点主表（最新状态） | 复合主键 `(gateway_id, device_id)`；`connection_id`（来源连接，可空）；`name`/`display_name`（显示名覆盖）；`device_type`；`subscribed`；`last_seen` 与 `last_temperature/humidity/battery/rssi` |
-| `telemetry` | 温湿度历史 | 自增 `id`；`(gateway_id, node_id)` + 各采样值 + `received_at`；外键级联删除；索引 `(gateway_id, node_id, received_at)` |
-| `panel_layouts` | 面板位置（**遗留**） | 按节点 id 存百分比坐标；新前端不再使用，保留兼容旧数据 |
-| `settings` | 键值设置 | `key` 主键；存运行标记（迁移幂等标记）与全局设置（`background`、`lock_all`） |
-| `mqtt_connections` | MQTT 连接配置 | `host/port/username/password`、`topics`（JSON 字符串：`[{topic,name,type}]`）、`enabled`（启用开关） |
-| `panels` | **面板容器** | `id`、`name`、`locked`（锁定后禁止改名/删除/增删小面板） |
-| `topic_panels` | **节点小面板** | `panel_id`（归属容器）、`connection_id`+`topic`（绑定订阅主题，均可空）、`type`（当前仅 `thermo`）、`x/y/w/h`（**像素坐标**）、实时缓存 `temperature/humidity/battery/rssi/last_seen`；唯一约束 `(panel_id, connection_id, topic)` |
+| `users` | 用户账号 | `username`（唯一，COLLATE NOCASE 不区分大小写）、`password_hash`（scrypt，存 `salt:hash`）、`role`（`admin`/`user`）、`created_at` |
+| `sessions` | 登录会话 | `token`（PK，随机 hex）、`user_id`；落库保证跨重启保持登录态，退出/删用户时删除 |
+| `user_settings` | 每用户设置 | `user_id`+`key` 复合主键；存 `lock_all` 等 |
+| `nodes` | 节点主表（最新状态） | 复合主键 `(user_id, gateway_id, device_id)`；`connection_id`（来源连接，可空）；`name`/`display_name`（显示名覆盖）；`device_type`；`subscribed`；`last_seen` 与 `last_temperature/humidity/battery/rssi` |
+| `telemetry` | 温湿度历史 | 自增 `id`；`(user_id, gateway_id, node_id)` + 各采样值 + `received_at`；外键级联删除；索引 `(user_id, gateway_id, node_id, received_at)` |
+| `panel_layouts` | 面板位置（**遗留**） | 按节点 id 存百分比坐标；新前端不再使用，保留兼容旧数据（按 user_id 隔离） |
+| `settings` | 键值设置 | `key` 主键；存迁移幂等标记与全局键（`background` 等）；`lock_all` 已迁到 `user_settings` |
+| `mqtt_connections` | MQTT 连接配置 | `user_id`；`host/port/username/password`、`topics`（JSON 字符串：`[{topic,name,type}]`）、`enabled`（启用开关） |
+| `panels` | **面板容器** | `user_id`、`id`、`name`、`locked`（锁定后禁止改名/删除/增删小面板） |
+| `topic_panels` | **节点小面板** | `user_id`、`panel_id`（归属容器）、`connection_id`+`topic`（绑定订阅主题，均可空）、`type`（当前仅 `thermo`）、`x/y/w/h`（**像素坐标**）、实时缓存 `temperature/humidity/battery/rssi/last_seen`；唯一约束 `(panel_id, connection_id, topic)` |
 
 ### 5.2 设计要点
 
@@ -138,14 +143,24 @@ HTTP 侧与 MQTT 侧通过 `db.js` 共享同一份状态：消息落库后，Web
 
 | 迁移 | 内容 | 幂等标记 |
 |---|---|---|
+| `migrateUsersScope` | **多用户**：丢弃旧库全部业务数据（节点/历史/面板/MQTT/布局），重建带 `user_id` 的新 schema；`users`/`sessions`/`user_settings` 建表；同时打上 `layout_px`/`topic_panels_nullable`/`panels_containers_v1` 使旧迁移 no-op | 列存在性（nodes 含 `user_id`） |
 | `migrateIfNeeded` | 旧库 `nodes` 单 `device_id` 主键 → 复合身份；补 `connection_id` 列 | 列存在性 |
-| `migrateMqttConnections` | 旧扁平 `mqtt_host` 等设置键 → 一条「默认连接」 | `mqtt_seeded` |
 | `migratePanelLayoutToPx` | 面板坐标 百分比 → 像素 | `layout_px` |
 | `migrateTopicPanelsNullable` | `topic_panels` 的 connection/topic 允许 NULL | `topic_panels_nullable` |
-| `migratePanelContainers` | 引入 `panels` 容器表，`topic_panels` 挂 `panel_id` | `panels_containers_v1` |
+| `migratePanelContainers` | 引入 `panels` 容器表，`topic_panels` 挂 `panel_id`（新 schema 已含则直接标记 no-op） | `panels_containers_v1` |
 | `migratePanelLocked` | `panels` 增加 `locked` 列 | 列存在性 |
 
+> **旧 `migrateMqttConnections` 已移除**：默认 MQTT 连接改为「新用户注册时按 `config.json` 的 `mqtt.*` 种子」，随用户隔离，不再全局种子。
+
 **关键 SQLite 选项**：`journal_mode = WAL`（读写并发友好）、`busy_timeout = 5000`。迁移中涉及多步 DDL/DML 的事务（`BEGIN`/`COMMIT`/`ROLLBACK`）保证原子性。
+
+### 5.4 认证与多用户（routes/auth.js）
+
+- **认证方式**：Bearer Token（`Authorization: Bearer <token>`）。token 为 `crypto.randomBytes(32)` 随机 hex，落库 `sessions` 表，**长期有效**（刷新/重开浏览器保持登录），退出登录/删除用户时删除；每次请求 `touchSession` 更新时间戳，便于将来加过期策略。
+- **密码哈希**：Node 内置 `crypto.scryptSync`（无新增依赖），存 `salt:hash`，登录用 `timingSafeEqual` 常数时间比对。
+- **鉴权中间件**：`requireAuth` 校验 token → `req.user = {id, username, role}`；`requireAdmin` 校验管理员。`server.js` 中 `/api/auth/*` 挂载在 `requireAuth` 之前，其余所有 `/api/*` 均需登录。
+- **初始管理员**：`config.json` 的 `admin.username/password` 非空时启动创建（或提升）管理员；管理员**仅账号管理**（`/api/users`：列用户、重置密码、删除用户），无查看其他用户数据的权限。
+- **多租户隔离**：所有业务表带 `user_id`；路由从 `req.user.id` 取用户传入 db 层；MQTT 消息按来源连接的 `user_id` 归属落库与面板路由（`mqtt.js` 的 `onMessage` 透传 `rec.user_id`）。
 
 ---
 
@@ -288,7 +303,7 @@ Vue 3 全局版（CDN 引入，`vue.global.prod.js`），无构建步骤。`inde
 - **`type` 仅支持 `thermo`**：`switch`（开关）类型在 schema 与 UI 中预留，渲染为"待支持"占位，需扩展消息解析与面板渲染。
 - **背景图上传未接线**：`multer` 依赖与 `settings.background` 字段已存在、`public/uploads/` 已就位，但当前无上传路由，`storage.*` 配置也未在 `config.js` 默认值中生效；属预留能力。
 - **`panel_layouts` 表为遗留**：基于节点 id 的百分比布局已不再被前端使用，保留仅为旧数据兼容，未来可清理。
-- **无鉴权**：服务面向内网/家庭环境，API 未做认证。若暴露公网需在反向代理层增加 Basic Auth / 网络白名单。
+- **多用户已实现**：登录/注册 + 每用户数据完全隔离 + 管理员账号管理（见 §5.4）。若暴露公网仍建议在反向代理层叠加 HTTPS 与限流；token 存 localStorage，属常规 Web 前端方案（无 CSP 加固）。
 - **单进程部署**：未做多实例/负载均衡；单机小规模场景足够，不做横向扩展设计。
 
 ---
@@ -298,5 +313,5 @@ Vue 3 全局版（CDN 引入，`vue.global.prod.js`），无构建步骤。`inde
 1. **新设备类型**：在 `validate()` 中解析更多字段（如 `co2`），扩展 `type` 与面板渲染分支。
 2. **WebSocket / SSE 推送**：替代 10s 轮询，实现真正实时刷新（当前轮询已足够，非必需）。
 3. **告警规则**：温度越界 / 长时间离线告警，复用 `settings` 键值 + 历史清理定时器模式。
-4. **鉴权与多用户**：增加登录与只读/可编辑权限分层，配合公网部署。
+4. **权限分层**：已在登录 + 多用户隔离 + 管理员账号管理基础上，可进一步做只读/可编辑角色或按面板粒度的权限。
 5. **数据导出**：按节点/时间段导出 CSV/JSON，供数据分析。

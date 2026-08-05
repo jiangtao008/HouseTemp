@@ -10,14 +10,14 @@ function rowToJson(row) {
   return { gateway_id: row.gateway_id, node_id: row.node_id, x: row.x, y: row.y, w: row.w, h: row.h };
 }
 
-router.get('/', (_req, res) => {
-  res.json({ layouts: db.getLayouts().map(rowToJson) });
+router.get('/', (req, res) => {
+  res.json({ layouts: db.getLayouts(req.user.id).map(rowToJson) });
 });
 
 router.put('/:gatewayId/:deviceId', (req, res) => {
   const gatewayId = Number(req.params.gatewayId);
   const deviceId = Number(req.params.deviceId);
-  if (!db.getNode(gatewayId, deviceId)) {
+  if (!db.getNode(req.user.id, gatewayId, deviceId)) {
     return res.status(404).json({ detail: `节点 ${gatewayId}/${deviceId} 不存在` });
   }
   const b = req.body || {};
@@ -26,8 +26,8 @@ router.put('/:gatewayId/:deviceId', (req, res) => {
   const h = clamp(num(b.h, 24), 5, 100);
   const x = clamp(num(b.x, 10), 0, 100 - w);
   const y = clamp(num(b.y, 10), 0, 100 - h);
-  db.upsertLayout(gatewayId, deviceId, x, y, w, h);
-  res.json(rowToJson(db.getLayout(gatewayId, deviceId)));
+  db.upsertLayout(req.user.id, gatewayId, deviceId, x, y, w, h);
+  res.json(rowToJson(db.getLayout(req.user.id, gatewayId, deviceId)));
 });
 
 module.exports = router;

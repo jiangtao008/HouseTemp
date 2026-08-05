@@ -11,6 +11,8 @@ const DEFAULTS = {
   mqtt: { host: '127.0.0.1', port: 1883, username: '', password: '', topics: [] },
   database: { path: 'data/thermo.db', retention_days: 30 },
   server: { host: '0.0.0.0', port: 8000 },
+  // 初始管理员：启动时按此创建（或提升）管理员账号；username/password 均为空则不创建
+  admin: { username: '', password: '' },
 };
 
 function deepMerge(base, extra) {

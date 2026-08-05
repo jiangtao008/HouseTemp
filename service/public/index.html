@@ -8,10 +8,55 @@
 </head>
 <body>
   <div id="app">
+    <!-- 登录 / 注册 -->
+    <div v-if="!authed" class="login-wrap">
+      <div class="login-card">
+        <div class="login-brand">
+          <span class="login-logo">温</span>
+          <span class="login-brand-text">全屋温湿度监控</span>
+        </div>
+        <div class="login-tabs">
+          <button class="login-tab" :class="{ active: loginTab === 'login' }" @click="loginTab = 'login'">登录</button>
+          <button class="login-tab" :class="{ active: loginTab === 'register' }" @click="loginTab = 'register'">注册</button>
+        </div>
+        <form v-if="loginTab === 'login'" @submit.prevent="login">
+          <label class="login-label">用户名</label>
+          <input class="login-input" v-model="loginForm.username" placeholder="请输入用户名" autocomplete="username">
+          <label class="login-label">密码</label>
+          <input class="login-input" v-model="loginForm.password" type="password" placeholder="请输入密码" autocomplete="current-password">
+          <p v-if="authError" class="login-error">{{ authError }}</p>
+          <button class="btn primary login-submit" type="submit" :disabled="authBusy">{{ authBusy ? '登录中…' : '登 录' }}</button>
+        </form>
+        <form v-else @submit.prevent="register">
+          <label class="login-label">用户名</label>
+          <input class="login-input" v-model="registerForm.username" placeholder="2-32 个字符，不含空格" autocomplete="username">
+          <label class="login-label">密码</label>
+          <input class="login-input" v-model="registerForm.password" type="password" placeholder="至少 6 位" autocomplete="new-password">
+          <label class="login-label">确认密码</label>
+          <input class="login-input" v-model="registerForm.confirm" type="password" placeholder="再次输入密码" autocomplete="new-password">
+          <p v-if="authError" class="login-error">{{ authError }}</p>
+          <button class="btn primary login-submit" type="submit" :disabled="authBusy">{{ authBusy ? '注册中…' : '注 册' }}</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 已登录主界面 -->
+    <template v-else>
     <!-- 顶部 Tab -->
     <header class="tabbar">
       <button class="tab" :class="{ active: tab === 'main' }" @click="switchTab('main')">主页面</button>
       <button class="tab" :class="{ active: tab === 'subs' }" @click="switchTab('subs')">订阅页面</button>
+      <button v-if="role === 'admin'" class="tab" :class="{ active: tab === 'users' }" @click="switchTab('users')">用户管理</button>
+      <!-- 右上角用户区：logo（用户名首字）+ 用户名，点击弹出菜单 -->
+      <div class="user-area" @click="toggleUserMenu">
+        <span class="user-avatar">{{ userAvatarText }}</span>
+        <span class="user-name">{{ username }}</span>
+        <span class="user-caret">▾</span>
+        <div v-show="userMenuOpen" class="user-menu" @click.stop>
+          <button v-if="role === 'admin'" class="user-menu-item" @click="goAdminUsers">用户管理</button>
+          <button class="user-menu-item danger" @click="logout">退出登录</button>
+        </div>
+      </div>
     </header>
 
     <!-- 主页面 -->
@@ -330,6 +375,34 @@
       </div>
     </main>
 
+    <!-- 用户管理页面（仅管理员） -->
+    <main v-if="tab === 'users'" class="users-page">
+      <div class="users-head">
+        <span class="users-title">用户管理</span>
+        <span class="users-sub">账号管理：可重置密码、删除用户；管理员无法查看其他用户的配置数据</span>
+      </div>
+      <div class="users-table">
+        <div class="users-row users-head-row">
+          <span class="u-col u-name">用户名</span>
+          <span class="u-col u-role">角色</span>
+          <span class="u-col u-time">注册时间</span>
+          <span class="u-col u-actions">操作</span>
+        </div>
+        <div v-for="u in users" :key="u.id" class="users-row">
+          <span class="u-col u-name" :title="u.username">{{ u.username }}</span>
+          <span class="u-col u-role">
+            <span class="role-badge" :class="{ admin: u.role === 'admin' }">{{ u.role === 'admin' ? '管理员' : '用户' }}</span>
+          </span>
+          <span class="u-col u-time">{{ fmtDate(u.created_at) }}</span>
+          <span class="u-col u-actions">
+            <button class="btn btn-mini" @click="resetUserPassword(u)">重置密码</button>
+            <button class="btn btn-mini conn-del" :disabled="u.id === userId" :title="u.id === userId ? '不能删除自己' : '删除该用户（其全部数据一并删除）'"
+                    @click="deleteUser(u)">删除</button>
+          </span>
+        </div>
+      </div>
+    </main>
+
     <!-- 节点小面板图表设置弹窗 -->
     <div v-if="widgetSettings" class="modal-mask" @click.self="closeWidgetSettings">
       <div class="modal" role="dialog" aria-modal="true">
@@ -366,6 +439,7 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>

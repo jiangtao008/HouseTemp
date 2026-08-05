@@ -11,7 +11,7 @@ router.get('/', (req, res) => {
     mqtt_connected: mqttStatus.connected,
     mqtt_last_error: mqttStatus.lastError,
     uptime_sec: Math.round((Date.now() - req.app.locals.startTime) / 1000),
-    node_count: db.listNodes().length,
+    node_count: db.listNodes({ userId: req.user.id }).length,
   });
 });
 

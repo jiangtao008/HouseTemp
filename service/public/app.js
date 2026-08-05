@@ -55,6 +55,19 @@ function isValidMqttTopic(t) {
 createApp({
   data() {
     return {
+      // 认证状态
+      authed: false,             // 是否已登录（未登录显示登录页）
+      authBusy: false,           // 登录/注册请求进行中
+      token: '',                 // Bearer token
+      username: '',
+      role: '',                  // 'admin' | 'user'
+      userId: null,              // 当前用户 id（用户管理里禁用删除自己）
+      userMenuOpen: false,       // 右上角用户下拉菜单
+      loginTab: 'login',         // 登录页当前 Tab：'login' | 'register'
+      loginForm: { username: '', password: '' },
+      registerForm: { username: '', password: '', confirm: '' },
+      authError: '',             // 登录/注册错误提示
+      users: [],                 // 用户管理列表（仅管理员加载）
       tab: 'main',
       nodes: [],                 // 全部节点（订阅页信息列表用）
       panels: [],                // 面板容器（主舞台一次显示一个）
@@ -83,6 +96,10 @@ createApp({
   },
 
   computed: {
+    // 用户 logo：暂无头像，显示用户名首个字符
+    userAvatarText() {
+      return this.username ? this.username.charAt(0).toUpperCase() : '?';
+    },
     // 当前选中的面板容器（主舞台只显示它）
     selectedPanel() {
       return this.panels.find((p) => p.id === this.selectedPanelId) || null;
@@ -132,13 +149,150 @@ createApp({
     },
 
     async api(path, opts) {
+      opts = opts || {};
+      if (this.token) {
+        opts.headers = Object.assign({}, opts.headers, { Authorization: 'Bearer ' + this.token });
+      }
       const res = await fetch(path, opts);
       if (!res.ok) {
         let detail = res.status;
         try { detail = (await res.json()).detail || res.status; } catch (e) { /* ignore */ }
+        if (res.status === 401 && !String(path).startsWith('/api/auth/')) this.forceLogout();  // 会话失效 → 回登录页
         throw new Error(detail);
       }
       return res.json();
+    },
+
+    // ---------- 认证 / 用户管理 ----------
+    setAuth(token, username, role, userId) {
+      this.token = token;
+      this.username = username;
+      this.role = role;
+      this.userId = userId;
+      this.authed = true;
+      try { localStorage.setItem('monitor.auth', JSON.stringify({ token, username, role, userId })); } catch (e) { /* 忽略 */ }
+    },
+    clearAuth() {
+      this.token = ''; this.username = ''; this.role = ''; this.userId = null;
+      this.authed = false; this.userMenuOpen = false; this.tab = 'main';
+      // 清空上一用户的数据，避免下一用户短暂看到缓存
+      this.nodes = []; this.panels = []; this.widgets = []; this.availableNodes = [];
+      this.mqttConns = []; this.users = []; this.widgetCharts = {};
+      this.selectedPanelId = null; this.widgetSettings = null;
+      // 释放舞台监听，重新登录后再建（旧 stageBox 已随 v-else 移除）
+      if (this.measureObs) { this.measureObs.disconnect(); this.measureObs = null; }
+      try { localStorage.removeItem('monitor.auth'); } catch (e) { /* 忽略 */ }
+    },
+    /** 401 时登出（保留前端本地状态清理，不调服务端——token 已失效）。 */
+    forceLogout() {
+      this.stopApp();
+      this.clearAuth();
+    },
+    async login() {
+      const username = this.loginForm.username.trim();
+      const password = this.loginForm.password;
+      if (!username || !password) { this.authError = '请输入用户名和密码'; return; }
+      this.authBusy = true; this.authError = '';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { this.authError = data.detail || '登录失败'; return; }
+        this.setAuth(data.token, data.username, data.role, data.userId);
+        this.startApp();
+      } catch (e) {
+        this.authError = '网络错误：' + e.message;
+      } finally {
+        this.authBusy = false;
+      }
+    },
+    async register() {
+      const username = this.registerForm.username.trim();
+      const password = this.registerForm.password;
+      const confirm = this.registerForm.confirm;
+      if (!username || !password) { this.authError = '请输入用户名和密码'; return; }
+      if (password !== confirm) { this.authError = '两次输入的密码不一致'; return; }
+      this.authBusy = true; this.authError = '';
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { this.authError = data.detail || '注册失败'; return; }
+        this.setAuth(data.token, data.username, data.role, data.userId);
+        this.startApp();
+      } catch (e) {
+        this.authError = '网络错误：' + e.message;
+      } finally {
+        this.authBusy = false;
+      }
+    },
+    async logout() {
+      const t = this.token;
+      this.stopApp();
+      this.clearAuth();
+      if (t) {
+        try { await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + t } }); } catch (e) { /* 忽略 */ }
+      }
+    },
+    toggleUserMenu() {
+      this.userMenuOpen = !this.userMenuOpen;
+    },
+    goAdminUsers() {
+      this.userMenuOpen = false;
+      this.switchTab('users');
+    },
+    async loadUsers() {
+      try {
+        const res = await this.api('/api/users');
+        this.users = res.users || [];
+      } catch (e) { console.warn('加载用户列表失败', e); }
+    },
+    async resetUserPassword(u) {
+      const pw = prompt(`为用户「${u.username}」设置新密码（至少 6 位）：`);
+      if (pw == null) return;
+      if (pw.length < 6) { alert('密码至少 6 位'); return; }
+      try {
+        await this.api(`/api/users/${u.id}/password`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw }),
+        });
+        alert('密码已重置');
+      } catch (e) { alert('重置密码失败：' + e.message); }
+    },
+    async deleteUser(u) {
+      if (u.id === this.userId) { alert('不能删除自己'); return; }
+      if (!confirm(`确定删除用户「${u.username}」？其全部配置与数据将被删除，不可恢复`)) return;
+      try {
+        await this.api(`/api/users/${u.id}`, { method: 'DELETE' });
+        this.users = this.users.filter((x) => x.id !== u.id);
+      } catch (e) { alert('删除用户失败：' + e.message); }
+    },
+    /** 用户注册时间显示为本地 `YYYY-MM-DD HH:mm`。 */
+    fmtDate(iso) {
+      if (!iso) return '--';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '--';
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    },
+    /** 登录成功后启动轮询与舞台测量。 */
+    startApp() {
+      this.$nextTick(() => this.measureStage());
+      if (!this.measureObs && typeof ResizeObserver !== 'undefined' && this.$refs.stageBox) {
+        this.measureObs = new ResizeObserver(() => this.measureStage());
+        this.measureObs.observe(this.$refs.stageBox);
+      }
+      if (this.tab === 'users') this.loadUsers();
+      this.refreshAll();
+      if (!this.pollTimer) this.pollTimer = setInterval(() => this.refreshAll(), POLL_INTERVAL);
+    },
+    stopApp() {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
     },
 
     async refreshNodes() {
@@ -369,6 +523,7 @@ createApp({
 
     switchTab(t) {
       this.tab = t;
+      if (t === 'users') this.loadUsers();         // 进入用户管理页刷新列表
       this.$nextTick(() => this.measureStage());   // 主/订阅页切换后重测舞台尺寸
       this.refreshAll();
     },
@@ -922,7 +1077,7 @@ createApp({
     },
   },
 
-  mounted() {
+  async mounted() {
     // 恢复上次保存的侧边栏宽度
     try {
       const saved = parseInt(localStorage.getItem('monitor.sideRailWidth'), 10);
@@ -930,17 +1085,33 @@ createApp({
         this.sideRailWidth = saved;
       }
     } catch (err) { /* 忽略 */ }
-    // 舞台等比缩放：随容器尺寸变化实时重算（窗口缩放 / 侧边栏拖宽都会触发）
-    this.measureStage();
-    if (typeof ResizeObserver !== 'undefined') {
-      this.measureObs = new ResizeObserver(() => this.measureStage());
-      if (this.$refs.stageBox) this.measureObs.observe(this.$refs.stageBox);
+    // 点击页面其他区域时收起右上角用户菜单
+    this._closeMenu = (e) => {
+      if (this.userMenuOpen && !(e.target && e.target.closest && e.target.closest('.user-area'))) {
+        this.userMenuOpen = false;
+      }
+    };
+    document.addEventListener('click', this._closeMenu);
+    // 恢复登录态：本地有 token 则调 /api/auth/me 校验，有效则直接进入主界面
+    let savedAuth = null;
+    try { savedAuth = JSON.parse(localStorage.getItem('monitor.auth')); } catch (err) { /* 忽略 */ }
+    if (savedAuth && savedAuth.token) {
+      try {
+        const res = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + savedAuth.token } });
+        if (res.ok) {
+          const me = await res.json();
+          this.setAuth(savedAuth.token, me.username, me.role, me.userId);
+          this.startApp();
+          return;
+        }
+      } catch (err) { /* 网络异常 → 停在登录页 */ }
+      try { localStorage.removeItem('monitor.auth'); } catch (err) { /* 忽略 */ }
     }
-    this.refreshAll();
-    this.pollTimer = setInterval(() => this.refreshAll(), POLL_INTERVAL);
   },
   beforeUnmount() {
     clearInterval(this.pollTimer);
-    if (this.measureObs) this.measureObs.disconnect();
+    this.pollTimer = null;
+    if (this.measureObs) { this.measureObs.disconnect(); this.measureObs = null; }
+    if (this._closeMenu) document.removeEventListener('click', this._closeMenu);
   },
 }).mount('#app');

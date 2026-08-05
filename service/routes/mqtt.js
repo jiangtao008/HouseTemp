@@ -77,15 +77,15 @@ function getConnOr404(req, res) {
     return null;
   }
   const row = db.getMqttConnection(id);
-  if (!row) {
+  if (!row || row.user_id !== req.user.id) {
     res.status(404).json({ detail: '连接不存在' });
     return null;
   }
   return row;
 }
 
-router.get('/', (_req, res) => {
-  res.json({ connections: db.listMqttConnections().map(connToJson) });
+router.get('/', (req, res) => {
+  res.json({ connections: db.listUserMqttConnections(req.user.id).map(connToJson) });
 });
 
 router.post('/', (req, res) => {
@@ -104,7 +104,7 @@ router.post('/', (req, res) => {
   if (topics.error) return res.status(400).json({ detail: `MQTT 主题不合法：${topics.error}` });
   const enabled = body.enabled === undefined ? true : !!body.enabled;
 
-  const row = db.insertMqttConnection({ name, host, port, username, password, topics, enabled });
+  const row = db.insertMqttConnection({ userId: req.user.id, name, host, port, username, password, topics, enabled });
   db.syncTopicPanels(row.id, topics);
   mqttClient.connect(row.id);
   res.status(201).json(connToJson(row));

@@ -6,6 +6,9 @@
 
 ## 功能
 
+- **多用户登录**：登录页支持登录/注册（Tab 切换）；登录后主界面右上角显示用户名 + 头像（用户名首字），点击弹出「退出登录」菜单
+- **数据完全隔离**：每个用户的面板、MQTT 连接、节点、历史曲线相互独立，登录后加载各自的配置
+- **管理员（仅账号管理）**：初始管理员由 `config.json` 配置；管理员可查看用户列表、重置密码、删除用户，但看不到其他用户的配置数据
 - 订阅配置的 MQTT 主题（支持 `+`/`#` 通配符），将温湿度/电池/信号落库（SQLite）
 - Web 两个 Tab：
   - **主页面**：默认页，主舞台一次显示一个**面板容器**，容器内以流式卡片展示其绑定的**节点小面板**（设备名、温度、湿度、电池、信号）。右侧**面板管理表**（二级）管理：面板容器可增删、**改名**、**锁定/解锁**（锁定后禁止改名、删除、增删小面板，仍可查看），点击切换显示；展开某面板可见其节点小面板，并可用「添加节点」下拉把订阅主题加入（同一主题可加入多个面板，单个面板内不重复）。MQTT 消息到达时对应小面板自动刷新
@@ -52,12 +55,15 @@ npm start                        # 启动，默认 0.0.0.0:8000
   "mqtt": { "host": "127.0.0.1", "port": 1883, "username": "", "password": "", "topics": [] },
   "database": { "path": "data/thermo.db", "retention_days": 30 },
   "server": { "host": "0.0.0.0", "port": 8000 },
-  "storage": { "upload_dir": "public/uploads", "max_upload_mb": 10 }
+  "storage": { "upload_dir": "public/uploads", "max_upload_mb": 10 },
+  "admin": { "username": "admin", "password": "" }
 }
 ```
 
 说明：
-- **MQTT 连接以 Web 端管理为准**：连接（含地址/端口/用户名/密码/启用开关/订阅主题）存 `mqtt_connections` 表，可在订阅页平铺的连接卡片中增删改，保存后自动重连该连接并跨重启保留；`config.json` 的 `mqtt.*` 仅在**全新数据库**（无历史配置）时用于初始化第一条「默认连接」
+- **登录/多用户**：所有用户需登录后使用。每个用户的 MQTT 连接、节点、面板、历史数据完全隔离。新用户注册时按 `config.json` 的 `mqtt.*` 初始化一条「默认连接」（开箱即用，可在订阅页增删改）
+- **初始管理员**：`admin.username/password` 非空时，服务启动自动创建该管理员账号（已存在则保证其为管理员，不覆盖密码）；两者留空则不创建管理员。**注意**：升级到多用户版本后，旧库的节点/面板/MQTT/历史数据会被清空（从零开始），请先备份 `data/thermo.db`
+- **MQTT 连接以 Web 端管理为准**：连接（含地址/端口/用户名/密码/启用开关/订阅主题）存 `mqtt_connections` 表，可在订阅页平铺的连接卡片中增删改，保存后自动重连该连接并跨重启保留；`config.json` 的 `mqtt.*` 仅用于**新用户注册时**初始化第一条「默认连接」
 - `mqtt.topics`：订阅主题列表（如 `["gateway_1/node_5/temperature", "gateway_+/node_+/#"]`，支持 `+`/`#` 通配符）；**为空时不订阅任何主题**。每条连接有独立的主题列表，通过对应连接卡片里的输入框逐个添加
 - **节点归属连接**：`nodes` 表的 `connection_id` 记录每个节点最近一次由哪条连接上报，订阅页节点按连接分组显示在各卡片下；删除连接后其节点归入「未关联连接的节点」分组（`connection_id` 置空），仍可订阅/改名，节点再次上报会重新归属
 - **旧版单配置自动迁移**：升级启动时若 `settings` 表里存在旧的 `mqtt_host/mqtt_port/mqtt_username/mqtt_password/mqtt_topics` 扁平键，会自动迁移为一条名为「默认连接」的连接并删除这些键；已迁过或用户删光全部连接后不再重建（`mqtt_seeded` 标记保证幂等）
@@ -126,8 +132,17 @@ journalctl -u thermo-service -f                  # 查看日志
 
 ## API 一览
 
+除 `/api/auth/*` 外，所有接口均需 `Authorization: Bearer <token>`（登录/注册后返回），未登录返回 401。
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| POST | `/api/auth/register` | 注册（自动登录），`{"username","password"}`；用户名唯一 |
+| POST | `/api/auth/login` | 登录，`{"username","password"}` → `{token, username, role, userId}` |
+| POST | `/api/auth/logout` | 退出登录（删除会话） |
+| GET | `/api/auth/me` | 校验当前 token → `{username, role, userId}` |
+| GET | `/api/users` | （管理员）用户列表 |
+| PUT | `/api/users/{id}/password` | （管理员）重置密码 `{"password"}` |
+| DELETE | `/api/users/{id}` | （管理员）删除用户（级联清理其数据；不能删除自己/最后一个管理员） |
 | GET | `/api/nodes?subscribed=true&gateway={id}` | 节点列表（可只列某网关；含订阅状态、最新数据、离线标记） |
 | PUT | `/api/nodes/{gatewayId}/{deviceId}` | 设置订阅 / 修改显示名 `{"subscribed":true,"display_name":"主卧"}` |
 | GET | `/api/telemetry/{gatewayId}/{deviceId}?limit=100` | 历史数据 |
