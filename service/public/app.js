@@ -11,6 +11,34 @@ const WIDGET_MIN_W = 120;   // 与后端 MIN_W 一致（public/style.css .node-p
 const WIDGET_MIN_H = 90;    // 与后端 MIN_H 一致（public/style.css .node-panel min-height）
 const SNAP = 10;            // 位置/尺寸吸附网格：10px 倍数，方便对齐
 
+// 曲线小图表显示规则（响应式）：图表区为纵向堆叠、按布局均分剩余高度；
+// 放不下全部就只显示前面的几个（温度→湿度→电量），绝不挤压、不用滚动区。
+// 渲染尺寸 = 舞台坐标 × stageScale，随窗口缩放变化，才反映面板"够不够显示"。
+const CHART_MIN_W = 110;        // 渲染宽度低于此 → 隐藏全部图表（略低于面板 CSS 最小宽 120，让边界面板也能出图）
+const CHART_INFO_H = 165;       // 数字信息区（节点名/温度/湿度/电量/信号 + 内边距）估算高度
+const CHART_ROW_MIN = 66;       // 每个曲线行占用高度（含行距 + 底部时间轴行）：不够 → 少显示前面几个
+const CHART_REFRESH_MS = 120000;   // 曲线数据缓存有效期（节点约 5 分钟一报，2 分钟足够新）
+const CHART_LIMIT = 300;           // 曲线目标点数（后端按此抽稀，mini 图足够密又不至于拖慢渲染）
+
+// 图表时间范围选项（与后端 CHART_RANGES 白名单一致）：key = 设置存库值，label = 下拉显示，ms = 窗口时长
+const CHART_RANGES = [
+  { key: '1h',  label: '近 1 小时', ms: 1 * 3600e3 },
+  { key: '6h',  label: '近 6 小时', ms: 6 * 3600e3 },
+  { key: '1d',  label: '近 1 天',   ms: 24 * 3600e3 },
+  { key: '3d',  label: '近 3 天',   ms: 3 * 24 * 3600e3 },
+  { key: '7d',  label: '近 7 天',   ms: 7 * 24 * 3600e3 },
+  { key: '15d', label: '近 15 天',  ms: 15 * 24 * 3600e3 },
+  { key: '1M',  label: '近 1 个月', ms: 30 * 24 * 3600e3 },
+  { key: '3M',  label: '近 3 个月', ms: 90 * 24 * 3600e3 },
+  { key: '6M',  label: '近 6 个月', ms: 180 * 24 * 3600e3 },
+  { key: '1Y',  label: '近 1 年',   ms: 365 * 24 * 3600e3 },
+];
+/** 某小面板图表时间窗口时长（毫秒），未知/缺省按 1d。 */
+function chartRangeMs(range) {
+  const r = CHART_RANGES.find((x) => x.key === range);
+  return r ? r.ms : 24 * 3600e3;
+}
+
 /** MQTT 主题合法性校验（与服务端一致）：# 只能作最后一个完整层级，+ 必须独占一个层级。 */
 function isValidMqttTopic(t) {
   if (typeof t !== 'string' || t.trim() === '') return false;
@@ -49,6 +77,8 @@ createApp({
       refreshing: false,
       mqttConns: [],            // MQTT 连接列表（每条含瞬态编辑字段 password/newTopic/saving）
       addingConn: false,
+      widgetSettings: null,     // 节点小面板图表设置弹窗 { widgetId, name, show_temp, show_hum, show_bat, chart_range, saving }
+      widgetCharts: {},         // 曲线数据缓存：widgetId -> { points, lastSeen, fetchedAt }
     };
   },
 
@@ -69,6 +99,10 @@ createApp({
     // 当前面板里的节点小面板
     widgetsOfSelected() {
       return this.widgets.filter((w) => w.panel_id === this.selectedPanelId);
+    },
+    // 图表时间范围下拉选项（常量暴露给模板）
+    chartRanges() {
+      return CHART_RANGES;
     },
     // 未关联到任何连接（连接被删 / 旧数据迁移）的节点，按网关分组展示
     unassignedNodes() {
@@ -125,6 +159,7 @@ createApp({
           this.expandedPanelId = null;
         }
         this.autoPlaceWidgets();       // 旧数据/新添加的重叠小面板自动摆开
+        this.ensureWidgetCharts();     // 随轮询更新曲线（last_seen 变化即重拉）
       } catch (e) { console.warn('刷新面板失败', e); }
     },
     /** 可添加的节点（订阅主题池），供侧边栏「添加节点」下拉使用。 */
@@ -381,6 +416,7 @@ createApp({
       const w = box.clientWidth;
       const h = box.clientHeight;
       this.stageScale = w > 0 && h > 0 ? Math.min(w / STAGE_W, h / STAGE_H) : 1;
+      this.ensureWidgetCharts();   // 面板缩放变化 → 尺寸足够/不足时图表随之出现/隐藏
     },
     /** 开始拖动小面板：命中右下角手柄 → 调整大小，否则移动位置（仅面板未锁定）。 */
     startWidgetDrag(e, w) {
@@ -592,9 +628,277 @@ createApp({
       try {
         await this.api(`/api/panels/widgets/${widget.id}`, { method: 'DELETE' });
         this.widgets = this.widgets.filter((w) => w.id !== widget.id);
+        delete this.widgetCharts[widget.id];   // 清理曲线缓存
       } catch (e) {
         alert('删除节点小面板失败：' + e.message);
       }
+    },
+
+    // ---------- 图表设置与曲线 ----------
+    /** 打开某节点小面板的图表设置弹窗（默认值取当前设置，缺省视为开）。 */
+    openWidgetSettings(w) {
+      this.widgetSettings = {
+        widgetId: w.id,
+        name: this.widgetName(w),
+        show_temp: w.show_temp !== false,
+        show_hum: w.show_hum !== false,
+        show_bat: w.show_bat !== false,
+        chart_range: w.chart_range || '1d',
+        saving: false,
+      };
+    },
+    closeWidgetSettings() {
+      this.widgetSettings = null;
+    },
+    /** 保存图表设置（显示开关 + 时间范围；PUT；面板锁定不拦截——显示偏好，非结构性修改）。 */
+    async saveWidgetSettings() {
+      const s = this.widgetSettings;
+      if (!s) return;
+      s.saving = true;
+      try {
+        const updated = await this.api(`/api/panels/widgets/${s.widgetId}/settings`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            show_temp: s.show_temp,
+            show_hum: s.show_hum,
+            show_bat: s.show_bat,
+            chart_range: s.chart_range,
+          }),
+        });
+        const w = this.widgets.find((x) => x.id === s.widgetId);
+        if (w) {
+          w.show_temp = updated.show_temp;
+          w.show_hum = updated.show_hum;
+          w.show_bat = updated.show_bat;
+          w.chart_range = updated.chart_range;
+        }
+        this.closeWidgetSettings();
+        this.ensureWidgetCharts();   // 立即按新设置拉取/隐藏图表
+      } catch (e) {
+        alert('保存图表设置失败：' + e.message);
+      } finally {
+        s.saving = false;
+      }
+    },
+    /** 某图表开关是否打开（缺省视为开，兼容旧数据）。 */
+    chartFlag(w, key) {
+      return w ? w[key] !== false : true;
+    },
+    /** 该面板能显示几个曲线：按剩余高度计算，放不下就少显示前面的几个，绝不挤压/滚动。 */
+    chartCount(w) {
+      const s = this.stageScale || 1;
+      if ((w.w * s) < CHART_MIN_W) return 0;
+      const avail = (w.h * s) - CHART_INFO_H;
+      if (avail < CHART_ROW_MIN) return 0;
+      const enabled = (this.chartFlag(w, 'show_temp') ? 1 : 0)
+                    + (this.chartFlag(w, 'show_hum') ? 1 : 0)
+                    + (this.chartFlag(w, 'show_bat') ? 1 : 0);
+      return Math.max(0, Math.min(enabled, Math.floor(avail / CHART_ROW_MIN)));
+    },
+    /** 面板是否显示图表区（至少能放下一个曲线）。 */
+    showCharts(w) {
+      return this.chartCount(w) > 0;
+    },
+    /** 按顺序返回实际要显示的曲线 key（温度→湿度→电量，多出的放不下就不显示）。 */
+    chartsToShow(w) {
+      const keys = [];
+      if (this.chartFlag(w, 'show_temp')) keys.push('temperature');
+      if (this.chartFlag(w, 'show_hum')) keys.push('humidity');
+      if (this.chartFlag(w, 'show_bat')) keys.push('battery');
+      return keys.slice(0, this.chartCount(w));
+    },
+    /** 曲线 key → 样式类名（temp/hum/bat）。 */
+    miniChartClass(key) {
+      return key === 'temperature' ? 'temp' : key === 'humidity' ? 'hum' : 'bat';
+    },
+    /** 曲线 key → 中文标题。 */
+    miniChartLabel(key) {
+      return key === 'temperature' ? '温度' : key === 'humidity' ? '湿度' : '电量';
+    },
+    /** 拉取当前面板里需要展示曲线的图表数据（缓存未过期且数据未更新则跳过，防并发）。 */
+    ensureWidgetCharts() {
+      for (const w of this.widgetsOfSelected) {
+        if (w._chartFetching) continue;
+        const need = this.chartFlag(w, 'show_temp') || this.chartFlag(w, 'show_hum') || this.chartFlag(w, 'show_bat');
+        if (!need || !this.showCharts(w)) continue;
+        const cache = this.widgetCharts[w.id];
+        // 时间范围改变时即使数据未更新也重拉（窗口不同数据不同）
+        if (cache && cache.range === (w.chart_range || '1d')
+            && cache.lastSeen === w.last_seen && (Date.now() - cache.fetchedAt) < CHART_REFRESH_MS) continue;
+        w._chartFetching = true;
+        this.fetchWidgetChart(w).finally(() => { w._chartFetching = false; });
+      }
+    },
+    async fetchWidgetChart(w) {
+      try {
+        const range = w.chart_range || '1d';
+        const res = await this.api(`/api/panels/widgets/${w.id}/telemetry?limit=${CHART_LIMIT}&range=${encodeURIComponent(range)}`);
+        this.widgetCharts = {
+          ...this.widgetCharts,
+          [w.id]: { points: res.points || [], range, lastSeen: w.last_seen, fetchedAt: Date.now() },
+        };
+      } catch (e) {
+        console.warn('刷新图表数据失败', e);
+      }
+    },
+    /** 某条曲线的有效数据点是否 ≥ 2（可绘制）。 */
+    hasSpark(w, key) {
+      const cache = this.widgetCharts[w.id];
+      if (!cache || !cache.points) return false;
+      return cache.points.filter((p) => typeof p[key] === 'number' && Number.isFinite(p[key])).length >= 2;
+    },
+    /** 曲线时间窗口（毫秒）：右端锚定最新数据点、向左铺满所选时间范围（如近 1 天）。
+     * 窗口与已拉取数据的 range 一致，保证时间轴始终显示完整的所选范围（数据稀疏时左侧留空）。 */
+    chartWindow(w) {
+      const cache = this.widgetCharts[w.id];
+      const pts = cache ? cache.points : [];
+      const range = chartRangeMs((cache && cache.range) || (w.chart_range || '1d'));
+      let t1 = null;
+      for (const p of pts) {
+        const t = Date.parse(p.received_at);
+        if (!Number.isNaN(t) && (t1 === null || t > t1)) t1 = t;
+      }
+      if (t1 === null) return null;
+      return { t0: t1 - range, t1, span: range };
+    },
+    /** 自适应时间刻度步长：按窗口跨度从阶梯里选「步长 ≤ 跨度/目标段数」的第一档（5m~6M）。 */
+    pickTimeStep(span, target) {
+      const M = 60e3, H = 3600e3, D = 24 * H;
+      const ladder = [
+        5 * M, 15 * M, 30 * M, 1 * H, 2 * H, 3 * H, 6 * H, 12 * H,
+        1 * D, 2 * D, 3 * D, 7 * D, 15 * D, 30 * D, 60 * D, 90 * D, 180 * D,
+      ];
+      for (const s of ladder) {
+        if (span / s <= target) return s;
+      }
+      return 365 * D;
+    },
+    /** 相对时长 → 紧凑标签：15m / 6h / 3d / 1M / 1Y。 */
+    fmtAgo(ms) {
+      const min = ms / 60000;
+      if (min < 60) return Math.round(min) + 'm';
+      const h = min / 60;
+      if (h < 24) return (Number.isInteger(h) ? h : h.toFixed(1)) + 'h';
+      const d = h / 24;
+      if (d < 30) return (Number.isInteger(d) ? d : d.toFixed(1)) + 'd';
+      const mon = d / 30;
+      if (mon < 12) return Math.round(mon) + 'M';
+      return Math.round(mon / 12) + 'Y';
+    },
+    /** x 轴时间刻度：锚定窗口最新时间向左铺开；x 为 0..100 坐标系位置，标签为距最新点的相对时长（右端=现在）。 */
+    xTicksFor(w, key) {
+      const win = this.chartWindow(w);
+      if (!win) return [];
+      const step = this.pickTimeStep(win.span, 5);
+      const W = 100, P = 2;
+      const raw = [];
+      for (let k = 0; k <= 12; k++) {
+        const t = win.t1 - k * step;
+        if (t < win.t0 - step * 1e-6) break;
+        raw.push({ t, k });
+      }
+      raw.reverse();   // 左 → 右
+      const n = raw.length;
+      return raw.map((tk, i) => {
+        const x = P + ((tk.t - win.t0) / win.span) * (W - P * 2);
+        const left = (x / 100) * 100;
+        // 首尾刻度贴边对齐，避免文字被裁切；中间居中
+        const transform = i === 0 ? 'translateX(0)'
+          : i === n - 1 ? 'translateX(-100%)'
+          : 'translateX(-50%)';
+        return {
+          x,
+          label: tk.k === 0 ? '现在' : this.fmtAgo(win.t1 - tk.t),
+          style: { left: left + '%', transform },
+        };
+      });
+    },
+    /** 曲线纵轴「好看」范围：把数据 min/max 撑成 ≥3 个圆整刻度，返回刻度列表（供网格与曲线共用同一坐标）。 */
+    seriesYRange(w, key) {
+      const cache = this.widgetCharts[w.id];
+      const pts = cache ? cache.points : [];
+      let lo = null, hi = null;
+      for (const p of pts) {
+        const v = p[key];
+        if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+        if (lo === null || v < lo) lo = v;
+        if (hi === null || v > hi) hi = v;
+      }
+      if (lo === null) return null;
+      if (hi - lo < 1e-9) {   // 全为同一值：向两侧撑开，保证还能出 ≥3 刻度
+        const pad = Math.max(Math.abs(hi) * 0.01, 1e-3);
+        lo -= pad; hi += pad;
+      }
+      // 圆整步长：向下取 1/2/2.5/5 × 10^n，保证刻度数只增不减
+      const niceStep = (raw) => {
+        if (!(raw > 0)) return 1e-9;
+        const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+        const mag = raw / pow;
+        const n = mag < 1.5 ? 1 : mag < 3 ? 2 : mag < 3.5 ? 2.5 : mag < 7 ? 5 : 10;
+        return n * pow;
+      };
+      let step = niceStep((hi - lo) / 2);   // 目标 ≥3 刻度
+      let ticks = [];
+      while (true) {                        // 极小跨度时 step 取整会丢刻度：缩半步长重算
+        const start = Math.ceil(lo / step - 1e-9) * step;
+        ticks = [];
+        for (let v = start; v <= hi + step * 1e-6; v += step) ticks.push(v);
+        if (ticks.length >= 3) break;
+        step = niceStep(step * 0.5);
+      }
+      return { yLo: ticks[0], yHi: ticks[ticks.length - 1], ticks };
+    },
+    /** y 轴刻度值（≥3 个）：位置随网格线，首尾贴边、中间居中，避免重叠/裁切。 */
+    yTicksFor(w, key) {
+      const r = this.seriesYRange(w, key);
+      if (!r) return [];
+      let ticks = r.ticks;
+      if (ticks.length > 4) {               // 过密抽稀：首尾 + 两等分中间，仍 ≥3 个
+        const len = ticks.length;
+        const idxs = Array.from(new Set([0, len - 1,
+          Math.round((len - 1) / 3), Math.round((len - 1) * 2 / 3)])).sort((a, b) => a - b);
+        ticks = idxs.map((i) => ticks[i]);
+      }
+      const H = 60, P = 2;
+      const n = ticks.length;
+      return ticks.map((v, i) => {
+        const y = P + (H - P * 2) * (1 - (v - r.yLo) / (r.yHi - r.yLo));
+        let style;
+        if (i === 0) style = { bottom: '1px' };                       // 底部刻度贴边
+        else if (i === n - 1) style = { top: '1px' };                 // 顶部刻度贴边
+        else style = { top: (y / H * 100) + '%', transform: 'translateY(-50%)' };
+        return { v, y, label: this.fmtY(v, key), style };
+      });
+    },
+    /** 刻度数值格式化：温度 1 位小数、湿度取整、电量 2 位小数。 */
+    fmtY(v, key) {
+      if (key === 'temperature') return v.toFixed(1);
+      if (key === 'humidity') return String(Math.round(v));
+      return v.toFixed(2);   // battery
+    },
+    /** 生成 0..100 × 0..60 坐标系内的迷你折线 points：x 按真实时间、y 按圆整刻度区间，与网格线一致。 */
+    sparkPoints(w, key) {
+      const cache = this.widgetCharts[w.id];
+      const pts = cache ? cache.points : [];
+      const vals = pts.filter((p) => typeof p[key] === 'number' && Number.isFinite(p[key]));
+      if (vals.length < 2) return '';
+      const r = this.seriesYRange(w, key);
+      const win = this.chartWindow(w);
+      if (!r) return '';
+      const W = 100, H = 60, P = 2;
+      const xOf = (p, i) => {
+        if (win) {
+          const t = Date.parse(p.received_at);
+          if (!Number.isNaN(t)) return P + ((t - win.t0) / win.span) * (W - P * 2);
+        }
+        return P + (i / (vals.length - 1)) * (W - P * 2);   // 兜底：无有效时间戳时按索引均分
+      };
+      return vals.map((p, i) => {
+        const x = xOf(p, i);
+        const y = P + (H - P * 2) * (1 - (p[key] - r.yLo) / (r.yHi - r.yLo));
+        return x.toFixed(2) + ',' + y.toFixed(2);
+      }).join(' ');
     },
 
     // ---------- 格式化 ----------

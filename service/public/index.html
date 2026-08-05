@@ -35,15 +35,51 @@
                  @pointermove="onWidgetDrag($event, w)"
                  @pointerup="endWidgetDrag($event, w)"
                  @pointercancel="endWidgetDrag($event, w)">
-              <div class="node-name">{{ widgetName(w) }}</div>
+              <div class="node-head">
+                <span class="node-name">{{ widgetName(w) }}</span>
+                <span class="head-right">
+                  <span v-if="w.stale" class="stale-badge">离线</span>
+                  <button v-if="panelEditable" class="widget-gear" title="图表设置"
+                          @pointerdown.stop @click.stop="openWidgetSettings(w)">⚙</button>
+                </span>
+              </div>
               <template v-if="w.type === 'thermo'">
                 <div class="node-temp">{{ fmtTemp(w.temperature) }}</div>
                 <div class="node-row">💧 湿度 {{ w.humidity != null ? w.humidity + ' %' : '--' }}</div>
                 <div class="node-row">🔋 电池 {{ batteryText(w) }}</div>
                 <div class="node-row sub" v-if="w.rssi != null">信号 {{ w.rssi }} dBm</div>
+                <!-- 曲线小图表：纵向堆叠、按布局均分剩余高度；放不下就只显示前面几个，不挤压不滚动 -->
+                <div class="node-charts" v-if="showCharts(w)">
+                  <div v-for="key in chartsToShow(w)" :key="key" class="mini-chart">
+                    <span class="mini-chart-title" :class="miniChartClass(key)">{{ miniChartLabel(key) }}</span>
+                    <template v-if="hasSpark(w, key)">
+                      <div class="spark-wrap">
+                        <div class="spark-plot">
+                          <!-- 网格线：先画垫在曲线下，与刻度一一对应，颜色淡一点（背景刻度网格） -->
+                          <svg class="spark" viewBox="0 0 100 60" preserveAspectRatio="none">
+                            <line v-for="xt in xTicksFor(w, key)" :key="'xv' + xt.x" class="spark-grid spark-grid-v"
+                                  :x1="xt.x" y1="0" :x2="xt.x" y2="60" vector-effect="non-scaling-stroke"/>
+                            <line v-for="yt in yTicksFor(w, key)" :key="'yh' + yt.v" class="spark-grid spark-grid-h"
+                                  x1="0" :y1="yt.y" x2="100" :y2="yt.y" vector-effect="non-scaling-stroke"/>
+                            <polyline :points="sparkPoints(w, key)"
+                                      :class="['spark-line', miniChartClass(key)]" vector-effect="non-scaling-stroke"/>
+                          </svg>
+                          <!-- y 轴刻度值：≥3 个，叠在图区左侧，随网格线位置排布 -->
+                          <span v-for="yt in yTicksFor(w, key)" :key="'yl' + yt.v" class="spark-ytick"
+                                :style="yt.style">{{ yt.label }}</span>
+                        </div>
+                        <!-- x 轴时间刻度：1h/2h/3h 自适应，图区底部独立一行，随网格线位置排布 -->
+                        <div class="spark-xaxis">
+                          <span v-for="xt in xTicksFor(w, key)" :key="'xl' + xt.x" class="spark-xtick"
+                                :style="xt.style">{{ xt.label }}</span>
+                        </div>
+                      </div>
+                    </template>
+                    <span v-else class="spark-empty">暂无数据</span>
+                  </div>
+                </div>
               </template>
               <div v-else class="node-row sub">该类型待支持（{{ w.type }}）</div>
-              <div v-if="w.stale" class="stale-badge">离线</div>
               <div v-if="panelEditable" class="resize-handle" title="拖动调整大小"></div>
             </div>
           </div>
@@ -101,6 +137,7 @@
                   <span class="panel-dot" :class="{ off: w.stale }"></span>
                   <span class="widget-row-name" :title="w.topic">{{ widgetName(w) }}</span>
                   <span class="widget-row-temp">{{ fmtTemp(w.temperature) }}</span>
+                  <button class="panel-icon-btn" title="图表设置" @click="openWidgetSettings(w)">⚙</button>
                   <button class="panel-icon-btn del" title="删除节点小面板" @click="removeWidget(w)"
                           :disabled="panel.locked">✕</button>
                 </div>
@@ -292,6 +329,43 @@
         主页面节点小面板需手动添加：主页面右侧展开面板 →「添加节点」选择该主题。
       </div>
     </main>
+
+    <!-- 节点小面板图表设置弹窗 -->
+    <div v-if="widgetSettings" class="modal-mask" @click.self="closeWidgetSettings">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <span class="modal-title">图表设置 — {{ widgetSettings.name }}</span>
+          <button class="modal-close" title="关闭" @click="closeWidgetSettings">✕</button>
+        </div>
+        <div class="modal-body">
+          <label class="modal-check">
+            <input type="checkbox" v-model="widgetSettings.show_temp">
+            <span>显示温度图表</span>
+          </label>
+          <label class="modal-check">
+            <input type="checkbox" v-model="widgetSettings.show_hum">
+            <span>显示湿度图表</span>
+          </label>
+          <label class="modal-check">
+            <input type="checkbox" v-model="widgetSettings.show_bat">
+            <span>显示电量图表</span>
+          </label>
+          <label class="modal-field">
+            <span class="modal-field-label">曲线时间范围</span>
+            <select class="modal-select" v-model="widgetSettings.chart_range">
+              <option v-for="r in chartRanges" :key="r.key" :value="r.key">{{ r.label }}</option>
+            </select>
+          </label>
+          <p class="modal-tip">勾选后该节点小面板显示对应曲线小图表；时间范围为曲线横轴显示多久的数据（默认近 1 天）。面板尺寸过小时自动隐藏全部图表，仅显示数据。</p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" @click="closeWidgetSettings">取消</button>
+          <button class="btn primary" @click="saveWidgetSettings" :disabled="widgetSettings.saving">
+            {{ widgetSettings.saving ? '保存中…' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>

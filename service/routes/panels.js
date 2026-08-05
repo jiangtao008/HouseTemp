@@ -12,6 +12,13 @@ const MIN_W = 120;   // 与前端 public/style.css 的 .node-panel min-width 一
 const MIN_H = 90;    // 与前端 public/style.css 的 .node-panel min-height 一致
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
+// 图表时间范围白名单（与前端设置下拉一致）；时间轴窗口 = now - rangeMs → now
+const CHART_RANGES = {
+  '1h': 3600e3, '6h': 6 * 3600e3, '1d': 86400e3, '3d': 3 * 86400e3,
+  '7d': 7 * 86400e3, '15d': 15 * 86400e3, '1M': 30 * 86400e3,
+  '3M': 90 * 86400e3, '6M': 180 * 86400e3, '1Y': 365 * 86400e3,
+};
+
 function widgetToJson(w) {
   return {
     id: w.id,
@@ -27,6 +34,10 @@ function widgetToJson(w) {
     rssi: w.rssi,
     last_seen: w.last_seen,
     stale: !!w.stale,
+    show_temp: w.show_temp !== 0,
+    show_hum: w.show_hum !== 0,
+    show_bat: w.show_bat !== 0,
+    chart_range: w.chart_range || '1d',
   };
 }
 
@@ -104,6 +115,39 @@ router.put('/widgets/:id', (req, res) => {
   const x = clamp(num(b.x, 10), 0, STAGE_W - w);
   const y = clamp(num(b.y, 10), 0, STAGE_H - h);
   res.json(widgetToJson(db.updateWidgetLayout(id, x, y, w, h)));
+});
+
+/** 小面板图表设置（显示温度/湿度/电量曲线 + 时间范围）。部分更新；面板锁定不拦截（显示偏好，非结构性修改）。 */
+router.put('/widgets/:id/settings', (req, res) => {
+  const id = Number(req.params.id);
+  if (!db.getWidget(id)) return res.status(404).json({ detail: '节点小面板不存在' });
+  const b = req.body || {};
+  const settings = {};
+  for (const k of ['show_temp', 'show_hum', 'show_bat']) {
+    if (b[k] !== undefined) settings[k] = !!b[k];
+  }
+  if (b.chart_range !== undefined) {
+    if (!CHART_RANGES[b.chart_range]) {
+      return res.status(400).json({ detail: `不支持的时间范围：${b.chart_range}` });
+    }
+    settings.chart_range = String(b.chart_range);
+  }
+  if (!Object.keys(settings).length) return res.status(400).json({ detail: '没有可更新的设置项' });
+  res.json(widgetToJson(db.updateWidgetSettings(id, settings)));
+});
+
+/** 小面板曲线历史（图表数据）：按绑定主题命中节点，合并历史、时间升序；
+ * range 指定时间窗口（1h/6h/1d/…/1Y），只取窗口内数据并抽稀到 limit 条。 */
+router.get('/widgets/:id/telemetry', (req, res) => {
+  const id = Number(req.params.id);
+  const widget = db.getWidget(id);
+  if (!widget) return res.status(404).json({ detail: '节点小面板不存在' });
+  let limit = Number(req.query.limit) || 300;
+  limit = Math.max(1, Math.min(1000, Math.trunc(limit)));
+  const rangeKey = CHART_RANGES[req.query.range] ? String(req.query.range) : '1d';
+  const since = new Date(Date.now() - CHART_RANGES[rangeKey]).toISOString();
+  const points = db.listWidgetTelemetry(widget, { limit, since });
+  res.json({ widget_id: id, range: rangeKey, count: points.length, points });
 });
 
 /** 删除节点小面板。 */

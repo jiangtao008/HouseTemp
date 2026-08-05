@@ -409,12 +409,48 @@ body {
   pointer-events: none;
 }
 .widget-empty .sub { font-size: 12px; opacity: .8; }
+/* 节点面板头部：名字 + 「离线」标记 + 图表设置齿轮（齿轮仅面板解锁时渲染，常显） */
+.node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .node-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 15px;
   font-weight: 600;
   color: #ffffff;
   text-shadow: 0 1px 3px rgba(0,0,0,.6);
 }
+.head-right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.widget-gear {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  color: #9aa0b0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.widget-gear:focus-visible { outline: none; background: #363a4a; color: #fff; }
+.widget-gear:hover { background: #363a4a; color: #fff; }
 .node-temp {
   font-size: 34px;
   font-weight: 700;
@@ -425,14 +461,117 @@ body {
 .node-row { font-size: 13px; color: #c6cbd8; }
 .node-row.sub { font-size: 12px; color: #8a90a2; }
 .stale-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+  flex: none;
   font-size: 11px;
   padding: 2px 8px;
   border-radius: 10px;
   background: #e74c3c;
   color: #fff;
+}
+
+/* 曲线小图表：纵向堆叠、按布局均分剩余高度；放不下就只显示前面几个，不挤压、不用滚动区 */
+.node-charts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;             /* 由 JS 控制显示数量，保证内容一定放得下，无需滚动 */
+}
+.mini-chart {
+  flex: 1 1 0;                  /* 均分曲线区剩余高度（按布局而定，随面板伸缩，不设上限） */
+  width: 100%;
+  min-height: 50px;             /* 曲线最低高度：不够就少显示几个，不挤压 */
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .06);
+}
+.mini-chart-title {
+  font-size: 10px;
+  line-height: 1;
+  color: #8a90a2;
+}
+.mini-chart-title.temp { color: #6ea8fe; }
+.mini-chart-title.hum { color: #4ed8a8; }
+.mini-chart-title.bat { color: #ffd76a; }
+/* 曲线容器：占满 mini-chart 剩余高度（按布局而定），图区 + 底部时间轴两段 */
+.spark-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.spark-plot {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+.spark {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* 网格线：与刻度一一对应，颜色淡一点（背景刻度网格），细线不抢曲线 */
+.spark-grid { stroke-width: 1; }
+.spark-grid-h { stroke: rgba(255, 255, 255, .08); }
+.spark-grid-v { stroke: rgba(255, 255, 255, .05); }
+.spark-line {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.spark-line.temp { stroke: #6ea8fe; }
+.spark-line.hum { stroke: #4ed8a8; }
+.spark-line.bat { stroke: #ffd76a; }
+/* y 轴刻度值：图区左侧叠加的小标签（半透明底，压着网格线也可读）；首尾贴边、中间居中 */
+.spark-ytick {
+  position: absolute;
+  left: 2px;
+  padding: 1px 3px;
+  font-size: 9px;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #9aa0b0;
+  background: rgba(15, 17, 24, .62);
+  border-radius: 3px;
+  pointer-events: none;
+}
+/* x 轴时间刻度：图区底部独立一行，各刻度按位置排布 */
+.spark-xaxis {
+  position: relative;
+  flex: none;
+  width: 100%;
+  height: 12px;
+}
+.spark-xtick {
+  position: absolute;
+  bottom: 1px;
+  padding: 0 2px;
+  font-size: 8px;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #8a90a2;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.spark-empty {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #5f6472;
 }
 
 .empty-hint {
@@ -768,6 +907,113 @@ body {
 .btn.primary:hover { background: #4a6af0; }
 .btn.primary:disabled { opacity: .6; cursor: not-allowed; }
 .mqtt-tip { font-size: 12px; color: #6b7080; }
+
+/* ---------- 图表设置弹窗 ---------- */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .55);
+  backdrop-filter: blur(3px);
+}
+.modal {
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  background: #1f212b;
+  border: 1px solid #33374a;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+  overflow: hidden;
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #2b2e3a;
+}
+.modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal-close {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  color: #9aa0b0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.modal-close:hover { background: #363a4a; color: #fff; }
+.modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+}
+.modal-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  font-size: 14px;
+  color: #cfd3de;
+  cursor: pointer;
+  border: 1px solid #2b2e3a;
+  border-radius: 8px;
+  background: #262936;
+  transition: background .15s, border-color .15s;
+}
+.modal-check:hover { background: #2f3344; border-color: #3a3f52; }
+.modal-check input { width: 16px; height: 16px; accent-color: #3b5bdb; cursor: pointer; }
+.modal-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  font-size: 14px;
+  color: #cfd3de;
+  border: 1px solid #2b2e3a;
+  border-radius: 8px;
+  background: #262936;
+}
+.modal-field-label { flex: 1; }
+.modal-select {
+  flex: none;
+  min-width: 132px;
+  padding: 5px 8px;
+  font-size: 13px;
+  color: #e6e9f2;
+  background: #1f222d;
+  border: 1px solid #3a3f52;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.modal-select:focus-visible { outline: none; border-color: #3b5bdb; }
+.modal-tip { font-size: 12px; color: #8a90a2; margin-top: 2px; }
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #2b2e3a;
+}
 
 /* 滚动条 */
 .subs-page::-webkit-scrollbar { width: 10px; }

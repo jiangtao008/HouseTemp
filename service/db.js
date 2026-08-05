@@ -95,6 +95,10 @@ CREATE TABLE IF NOT EXISTS topic_panels (
     battery       REAL,
     rssi          INTEGER,
     last_seen     TEXT,
+    show_temp     INTEGER NOT NULL DEFAULT 1,  -- 显示温度曲线（图表设置）
+    show_hum      INTEGER NOT NULL DEFAULT 1,  -- 显示湿度曲线
+    show_bat      INTEGER NOT NULL DEFAULT 1,  -- 显示电量曲线
+    chart_range   TEXT    NOT NULL DEFAULT '1d', -- 曲线时间范围：1h/6h/1d/3d/7d/15d/1M/3M/6M/1Y
     UNIQUE (panel_id, connection_id, topic)
 );
 `;
@@ -297,6 +301,31 @@ function migratePanelLocked() {
   }
 }
 
+/** topic_panels 增加图表显示开关列（show_temp/show_hum/show_bat，默认开）。按列存在性幂等。 */
+function migrateWidgetChartFlags() {
+  const cols = db.prepare('PRAGMA table_info(topic_panels)').all();
+  const add = [
+    ['show_temp', '显示温度曲线'],
+    ['show_hum', '显示湿度曲线'],
+    ['show_bat', '显示电量曲线'],
+  ];
+  for (const [name, desc] of add) {
+    if (!cols.some((c) => c.name === name)) {
+      db.exec(`ALTER TABLE topic_panels ADD COLUMN ${name} INTEGER NOT NULL DEFAULT 1`);
+      console.log(`topic_panels 已增加 ${name} 列（${desc}）`);
+    }
+  }
+}
+
+/** topic_panels 增加图表时间范围列（chart_range，默认 1d）。按列存在性幂等。 */
+function migrateWidgetChartRange() {
+  const cols = db.prepare('PRAGMA table_info(topic_panels)').all();
+  if (!cols.some((c) => c.name === 'chart_range')) {
+    db.exec("ALTER TABLE topic_panels ADD COLUMN chart_range TEXT NOT NULL DEFAULT '1d'");
+    console.log('topic_panels 已增加 chart_range 列（曲线时间范围，默认 1d）');
+  }
+}
+
 function init(cfg) {
   fs.mkdirSync(path.dirname(cfg.database.path), { recursive: true });
   db = new Database(cfg.database.path);
@@ -310,6 +339,8 @@ function init(cfg) {
   migrateTopicPanelsNullable();
   migratePanelContainers();
   migratePanelLocked();
+  migrateWidgetChartFlags();
+  migrateWidgetChartRange();
   migrateMqttConnections(cfg);
 }
 
@@ -660,6 +691,98 @@ function updateWidgetLayout(id, x, y, w, h) {
   return getWidget(id);
 }
 
+/** 部分更新小面板图表设置（show_temp/show_hum/show_bat/chart_range，undefined 不修改）。 */
+function updateWidgetSettings(id, settings) {
+  const sets = [];
+  const params = { id };
+  for (const k of ['show_temp', 'show_hum', 'show_bat']) {
+    if (settings[k] !== undefined) {
+      sets.push(`${k} = @${k}`);
+      params[k] = settings[k] ? 1 : 0;
+    }
+  }
+  if (settings.chart_range !== undefined) {
+    sets.push('chart_range = @chart_range');
+    params.chart_range = settings.chart_range;
+  }
+  if (!sets.length) return getWidget(id);
+  db.prepare(`UPDATE topic_panels SET ${sets.join(', ')} WHERE id = @id`).run(params);
+  return getWidget(id);
+}
+
+/** 小面板 → 命中的节点 (gateway_id, device_id) 列表（曲线历史数据用）：
+ * 主题是具体节点主题时直接解析；含通配符时按来源连接内重建各节点主题匹配。 */
+function resolveWidgetNodeIds(w) {
+  const out = [];
+  const m = /^gateway_(\d+)\/node_(\d+)\/([^/]+)$/.exec(String(w.topic || ''));
+  if (m) {
+    const gid = Number(m[1]);
+    const did = Number(m[2]);
+    if (getNode(gid, did)) out.push({ gateway_id: gid, device_id: did });
+    return out;
+  }
+  const nodes = db.prepare('SELECT gateway_id, device_id, device_type FROM nodes WHERE connection_id = ?')
+    .all(w.connection_id);
+  for (const n of nodes) {
+    const t = `gateway_${n.gateway_id}/node_${n.device_id}/${n.device_type || 'thermo'}`;
+    if (topicMatches(w.topic, t)) out.push({ gateway_id: n.gateway_id, device_id: n.device_id });
+  }
+  return out;
+}
+
+/** 历史点抽稀：按数量均分桶、桶内取均值，首尾时间戳锚定，输出不超过 maxPoints 条（长范围曲线降点用）。 */
+function downsampleTelemetry(rows, maxPoints) {
+  const n = rows.length;
+  if (n <= maxPoints) return rows;
+  const avg = (arr) => (arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+  const out = [];
+  for (let i = 0; i < maxPoints; i++) {
+    const start = Math.floor(i * n / maxPoints);
+    const end = Math.max(start + 1, Math.floor((i + 1) * n / maxPoints));
+    let temp = [], hum = [], bat = [], rssi = null;
+    for (let j = start; j < end; j++) {
+      const p = rows[j];
+      if (typeof p.temperature === 'number') temp.push(p.temperature);
+      if (typeof p.humidity === 'number') hum.push(p.humidity);
+      if (typeof p.battery === 'number') bat.push(p.battery);
+      if (p.rssi != null) rssi = p.rssi;
+    }
+    const mid = rows[Math.floor((start + end - 1) / 2)];
+    out.push({
+      temperature: avg(temp),
+      humidity: avg(hum),
+      battery: avg(bat),
+      rssi,
+      // 首尾用真实边界时间戳，保证曲线 x 轴两端与窗口对齐
+      received_at: i === 0 ? rows[0].received_at
+        : i === maxPoints - 1 ? rows[n - 1].received_at
+        : mid.received_at,
+    });
+  }
+  return out;
+}
+
+/** 小面板曲线历史：命中节点历史合并、按时间升序；可给 since（ISO，时间窗口起点）过滤，并抽稀到 limit 条。 */
+function listWidgetTelemetry(widget, opts = {}) {
+  const ids = resolveWidgetNodeIds(widget);
+  if (!ids.length) return [];
+  const limit = (opts.limit && opts.limit > 0) ? Math.trunc(opts.limit) : 200;
+  const since = opts.since || null;
+  const rows = [];
+  for (const n of ids) {
+    const q = since
+      ? 'SELECT temperature, humidity, battery, rssi, received_at' +
+        ' FROM telemetry WHERE gateway_id = ? AND node_id = ? AND received_at >= ?'
+      : 'SELECT temperature, humidity, battery, rssi, received_at' +
+        ' FROM telemetry WHERE gateway_id = ? AND node_id = ?';
+    const params = since ? [n.gateway_id, n.device_id, since] : [n.gateway_id, n.device_id];
+    rows.push(...db.prepare(q).all(...params));
+  }
+  rows.sort((a, b) => (a.received_at < b.received_at ? -1 : a.received_at > b.received_at ? 1 : 0));
+  if (!since) return rows.slice(-limit);
+  return downsampleTelemetry(rows, limit);
+}
+
 /** 向某面板添加一个绑定订阅主题的节点小面板（同面板同主题去重）。 */
 function createWidget(panelId, node) {
   const exist = db.prepare(
@@ -726,6 +849,8 @@ module.exports = {
   listWidgets,
   getWidget,
   updateWidgetLayout,
+  updateWidgetSettings,
+  listWidgetTelemetry,
   createWidget,
   deleteWidget,
   listAvailableNodes,
