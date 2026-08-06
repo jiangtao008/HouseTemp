@@ -366,6 +366,9 @@ body {
 }
 .node-panel.widget.editable { cursor: grab; }
 .node-panel.widget.editable:hover { border-color: rgba(157, 177, 248, .5); }
+/* 面板锁定态：小面板可双击打开详情大弹窗（解锁态仍为拖动/缩放） */
+.node-panel.widget.dblclickable { cursor: pointer; }
+.node-panel.widget.dblclickable:hover { border-color: rgba(157, 177, 248, .5); }
 .node-panel.widget.dragging {
   cursor: grabbing;
   box-shadow: 0 0 0 2px rgba(157, 177, 248, .5), 0 8px 24px rgba(0, 0, 0, .35);
@@ -748,9 +751,10 @@ body {
 .topic-empty { font-size: 13px; color: #6b7080; padding: 4px 2px; }
 .topic-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
   padding: 6px 10px;
   background: #1f212b;
   border: 1px solid #2b2e3a;
@@ -781,6 +785,20 @@ body {
   cursor: pointer;
 }
 .topic-row .topic-name { flex: 1; min-width: 0; word-break: break-all; }
+/* 主题后展示的最新节点数据 / 状态 / 时间（订阅页） */
+.topic-latest {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #8a90a2;
+  white-space: nowrap;
+}
+.topic-latest .tl-data { color: #adb5bd; }
+.topic-latest .tl-sep { color: #5c6370; }
+.topic-latest .tl-status.on { color: #2f9e44; }
+.topic-latest .tl-status.off { color: #e67e22; }
+.topic-latest .tl-none { color: #5c6370; }
 .topic-del {
   flex-shrink: 0;
   color: #ff9d8f;
@@ -816,44 +834,6 @@ body {
   border-radius: 12px;
   padding: 14px;
 }
-/* 卡片内的节点区：与配置区用底色/边框区分 */
-.conn-nodes {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: #17181f;
-  border: 1px solid #2b2e3a;
-  border-radius: 10px;
-  padding: 10px;
-}
-.conn-nodes-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 0 2px 2px;
-  cursor: pointer;
-  user-select: none;
-}
-.conn-nodes-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: #adb5bd;
-}
-.conn-nodes-body { display: flex; flex-direction: column; gap: 8px; }
-.conn-nodes-toggle {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  color: #6b7080;
-  white-space: nowrap;
-}
-.conn-nodes-caret {
-  font-size: 18px;
-  line-height: 1;
-}
-.conn-nodes-head:hover .conn-nodes-toggle { color: #adb5bd; }
 .unassigned-block { margin-top: 14px; }
 .mqtt-conn-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .mqtt-conn-name {
@@ -1014,6 +994,121 @@ body {
   padding: 12px 16px;
   border-top: 1px solid #2b2e3a;
 }
+
+/* ---------- 节点小面板详情大弹窗（双击锁定面板的节点小面板打开） ---------- */
+.detail-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, .6);
+  backdrop-filter: blur(4px);
+}
+.detail-modal {
+  width: 760px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: #1f212b;
+  border: 1px solid #33374a;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, .6);
+  overflow: hidden;
+}
+.detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 20px;
+  border-bottom: 1px solid #2b2e3a;
+}
+.detail-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.detail-name {
+  flex: none;
+  max-width: 40%;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-topic {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: #6b7080;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 当前温湿度 + 电量：三张统计卡并排 */
+.detail-stats {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px 2px;
+}
+.detail-stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  background: #262936;
+  border: 1px solid #2b2e3a;
+  border-radius: 12px;
+}
+.detail-stat-label { font-size: 12px; color: #8a90a2; }
+.detail-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: #e8eaf0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.detail-stat-value.temp { color: #6ea8fe; }
+.detail-stat-value.hum { color: #4ed8a8; }
+.detail-stat-value.bat { color: #ffd76a; }
+/* 三条曲线垂直布局，均分剩余高度；视口太矮时纵向滚动 */
+.detail-charts {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 20px 20px;
+  overflow-y: auto;
+}
+.detail-chart {
+  flex: 1 1 0;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid rgba(255, 255, 255, .06);
+}
+.detail-chart-head { display: flex; align-items: center; gap: 8px; }
+.detail-chart-head .mini-chart-title { font-size: 12px; }
+/* 大弹窗里曲线刻度/标签/线条适当加大，保证在大尺寸下可读 */
+.detail-ytick { font-size: 11px; }
+.detail-xtick { font-size: 10px; }
+.detail-chart .spark-line { stroke-width: 2; }
+.detail-chart .spark-empty { font-size: 12px; }
 
 /* ---------- 登录 / 注册 ---------- */
 .login-wrap {

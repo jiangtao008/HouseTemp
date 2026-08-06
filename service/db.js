@@ -920,6 +920,45 @@ function deleteWidget(userId, id) {
   return db.prepare('DELETE FROM topic_panels WHERE user_id = ? AND id = ?').run(userId, id);
 }
 
+const NODE_STALE_AFTER_MS = 10 * 60 * 1000; // 超过 10 分钟未上报视为离线
+
+/** 为连接的订阅主题补充最新上报节点信息（订阅页在主题后展示数据/时间/状态）。
+ * 每个主题命中多个节点时取 last_seen 最新的一个；无命中返回 latest: null。 */
+function latestNodesByTopic(userId, connectionId, topics) {
+  const nodes = db.prepare('SELECT * FROM nodes WHERE user_id = ? AND connection_id = ?')
+    .all(userId, connectionId);
+  return (topics || []).map((t) => {
+    let best = null;
+    for (const n of nodes) {
+      const nt = `gateway_${n.gateway_id}/node_${n.device_id}/${n.device_type || 'thermo'}`;
+      if (topicMatches(t.topic, nt) && (!best || (n.last_seen || '') > (best.last_seen || ''))) {
+        best = n;
+      }
+    }
+    let latest = null;
+    if (best) {
+      let stale = false;
+      if (best.last_seen) {
+        const ts = new Date(best.last_seen).getTime();
+        stale = !Number.isNaN(ts) && Date.now() - ts > NODE_STALE_AFTER_MS;
+      }
+      latest = {
+        gateway_id: best.gateway_id,
+        device_id: best.device_id,
+        device_type: best.device_type || '',
+        name: best.name || '',
+        temperature: best.last_temperature,
+        humidity: best.last_humidity,
+        battery: best.last_battery,
+        rssi: best.last_rssi,
+        last_seen: best.last_seen,
+        stale,
+      };
+    }
+    return { ...t, latest };
+  });
+}
+
 /** 可添加的节点（订阅主题池）：该用户所有已启用连接的订阅主题，供「添加节点」下拉使用。 */
 function listAvailableNodes(userId) {
   const nodes = [];
@@ -980,6 +1019,7 @@ module.exports = {
   insertMqttConnection,
   updateMqttConnection,
   deleteMqttConnection,
+  topicMatches,
   syncTopicPanels,
   deleteTopicPanelsForConnection,
   routeMessageToPanels,
@@ -997,4 +1037,5 @@ module.exports = {
   createWidget,
   deleteWidget,
   listAvailableNodes,
+  latestNodesByTopic,
 };

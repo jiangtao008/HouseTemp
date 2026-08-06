@@ -64,7 +64,7 @@ function connToJson(row) {
     username: row.username,
     password_set: !!row.password,   // 不回传明文密码
     enabled: row.enabled,
-    topics: row.topics,             // 订阅主题列表（支持 +/# 通配符）；空数组表示不订阅任何主题
+    topics: db.latestNodesByTopic(row.user_id, row.id, row.topics),  // 订阅主题列表 + 每主题最新节点数据（数据/时间/状态）
     connected: st ? st.connected : false,
     last_error: st ? st.lastError : null,
   };

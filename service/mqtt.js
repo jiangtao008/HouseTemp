@@ -65,6 +65,12 @@ function validate(payload, topic, connectionId) {
 function onMessage(topic, payload, connectionId, userId) {
   const rec = validate(payload, topic, connectionId);
   if (!rec) return;
+  // 只监听订阅主题列表中的节点：消息主题须命中该连接任一订阅主题（支持通配符），否则忽略。
+  // 连接级参数以库内最新配置为准（订阅列表即用户当前订阅的主题）。
+  const conn = db.getMqttConnection(connectionId);
+  if (!conn || !conn.enabled) return;
+  const subscribed = (conn.topics || []).some((t) => db.topicMatches(t.topic, topic));
+  if (!subscribed) return;
   rec.user_id = userId;
   try {
     db.upsertTelemetry(rec);

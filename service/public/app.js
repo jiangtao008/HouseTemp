@@ -69,7 +69,6 @@ createApp({
       authError: '',             // 登录/注册错误提示
       users: [],                 // 用户管理列表（仅管理员加载）
       tab: 'main',
-      nodes: [],                 // 全部节点（订阅页信息列表用）
       panels: [],                // 面板容器（主舞台一次显示一个）
       widgets: [],               // 节点小面板（归属某个面板容器）
       availableNodes: [],        // 可添加的节点（订阅主题池）
@@ -91,6 +90,7 @@ createApp({
       mqttConns: [],            // MQTT 连接列表（每条含瞬态编辑字段 password/newTopic/saving）
       addingConn: false,
       widgetSettings: null,     // 节点小面板图表设置弹窗 { widgetId, name, show_temp, show_hum, show_bat, chart_range, saving }
+      widgetDetail: null,       // 节点小面板详情大弹窗：当前展示的小面板 id（双击锁定面板的小面板打开）
       widgetCharts: {},         // 曲线数据缓存：widgetId -> { points, lastSeen, fetchedAt }
     };
   },
@@ -121,33 +121,17 @@ createApp({
     chartRanges() {
       return CHART_RANGES;
     },
-    // 未关联到任何连接（连接被删 / 旧数据迁移）的节点，按网关分组展示
-    unassignedNodes() {
-      return this.nodes
-        .filter((n) => (n.connection_id ?? null) == null)
-        .sort((a, b) => a.gateway_id - b.gateway_id || a.device_id - b.device_id);
+    // 详情大弹窗当前展示的节点小面板（被删除/失效时返回 null，弹窗自动隐藏）
+    detailWidget() {
+      return this.widgets.find((w) => w.id === this.widgetDetail) || null;
     },
-    unassignedGroups() {
-      const groups = [];
-      const byGateway = new Map();
-      for (const n of this.unassignedNodes) {
-        if (!byGateway.has(n.gateway_id)) {
-          const g = { gateway_id: n.gateway_id, nodes: [] };
-          byGateway.set(n.gateway_id, g);
-          groups.push(g);
-        }
-        byGateway.get(n.gateway_id).nodes.push(n);
-      }
-      return groups;
+    // 详情大弹窗固定展示的三条曲线 key（温度→湿度→电量，垂直布局）
+    detailChartKeys() {
+      return ['temperature', 'humidity', 'battery'];
     },
   },
 
   methods: {
-    /** 节点复合键：(gateway_id, device_id)。 */
-    nodeKey(n) {
-      return n.gateway_id + '/' + n.device_id;
-    },
-
     async api(path, opts) {
       opts = opts || {};
       if (this.token) {
@@ -176,9 +160,9 @@ createApp({
       this.token = ''; this.username = ''; this.role = ''; this.userId = null;
       this.authed = false; this.userMenuOpen = false; this.tab = 'main';
       // 清空上一用户的数据，避免下一用户短暂看到缓存
-      this.nodes = []; this.panels = []; this.widgets = []; this.availableNodes = [];
+      this.panels = []; this.widgets = []; this.availableNodes = [];
       this.mqttConns = []; this.users = []; this.widgetCharts = {};
-      this.selectedPanelId = null; this.widgetSettings = null;
+      this.selectedPanelId = null; this.widgetSettings = null; this.widgetDetail = null;
       // 释放舞台监听，重新登录后再建（旧 stageBox 已随 v-else 移除）
       if (this.measureObs) { this.measureObs.disconnect(); this.measureObs = null; }
       try { localStorage.removeItem('monitor.auth'); } catch (e) { /* 忽略 */ }
@@ -295,10 +279,6 @@ createApp({
       this.pollTimer = null;
     },
 
-    async refreshNodes() {
-      try { this.nodes = await this.api('/api/nodes'); }
-      catch (e) { console.warn('刷新节点失败', e); }
-    },
     async refreshPanels() {
       try {
         const res = await this.api('/api/panels');
@@ -335,14 +315,13 @@ createApp({
         enabled: !!s.enabled,
         connected: !!s.connected,
         last_error: s.last_error || null,
-        topics: Array.isArray(s.topics) ? s.topics.map((t) => ({ topic: t.topic, name: t.name || '', type: t.type || 'thermo' })) : [],
+        topics: Array.isArray(s.topics) ? s.topics.map((t) => ({ topic: t.topic, name: t.name || '', type: t.type || 'thermo', latest: t.latest || null })) : [],
         password: '',       // 瞬态：明文密码不回显
         newTopic: '',       // 瞬态：待添加主题输入
         newTopicName: '',   // 瞬态：待添加主题的节点名字
         newTopicType: 'thermo', // 瞬态：待添加主题的类型
         saving: false,      // 瞬态：保存中标记
         showConfig: false,  // 瞬态：服务器配置折叠状态（默认收起）
-        showNodes: false,   // 瞬态：节点列表折叠状态（默认收起，可展开）
       };
     },
     async refreshMqtt() {
@@ -358,16 +337,17 @@ createApp({
             local.connected = !!s.connected;
             local.last_error = s.last_error || null;
             local.password_set = !!s.password_set;
+            // 只刷新每主题的最新节点数据（数据/时间/状态），不覆盖用户正在编辑的名字/类型
+            for (const st of s.topics) {
+              const lt = local.topics.find((t) => t.topic === st.topic);
+              if (lt) lt.latest = st.latest;
+            }
           } else {
             this.mqttConns.push(this.normalizeConn(s));
           }
         }
         this.mqttConns.sort((a, b) => a.id - b.id);
       } catch (e) { console.warn('刷新 MQTT 配置失败', e); }
-    },
-    /** 某条连接上报的节点列表（connection_id 与该连接 id 精确匹配）。 */
-    nodesForConn(connId) {
-      return this.nodes.filter((n) => (n.connection_id ?? null) === connId);
     },
     /** 保存单条连接（PUT 全字段 + 非空密码）。成功后应用服务端权威状态。 */
     async saveMqttConn(conn) {
@@ -397,13 +377,11 @@ createApp({
         const newTopicName = conn.newTopicName;
         const newTopicType = conn.newTopicType;
         const showConfig = conn.showConfig;
-        const showNodes = conn.showNodes;
         Object.assign(conn, this.normalizeConn(updated));
         conn.newTopic = newTopic;
         conn.newTopicName = newTopicName;
         conn.newTopicType = newTopicType;
         conn.showConfig = showConfig;
-        conn.showNodes = showNodes;
       } catch (e) {
         alert('保存连接失败：' + e.message);
       } finally {
@@ -512,7 +490,7 @@ createApp({
       if (this.refreshing) return;
       this.refreshing = true;
       try {
-        await Promise.all([this.refreshNodes(), this.refreshPanels(), this.refreshAvailableNodes()]);
+        await Promise.all([this.refreshPanels(), this.refreshAvailableNodes()]);
         if (this.tab === 'subs') {
           await this.refreshMqtt();
         }
@@ -710,6 +688,7 @@ createApp({
         await this.api(`/api/panels/${panel.id}`, { method: 'DELETE' });
         this.panels = this.panels.filter((p) => p.id !== panel.id);
         this.widgets = this.widgets.filter((w) => w.panel_id !== panel.id);
+        if (this.widgetDetail && !this.widgets.some((w) => w.id === this.widgetDetail)) this.widgetDetail = null;
         if (this.selectedPanelId === panel.id) {
           this.selectedPanelId = this.panels.length ? this.panels[0].id : null;
         }
@@ -784,6 +763,7 @@ createApp({
         await this.api(`/api/panels/widgets/${widget.id}`, { method: 'DELETE' });
         this.widgets = this.widgets.filter((w) => w.id !== widget.id);
         delete this.widgetCharts[widget.id];   // 清理曲线缓存
+        if (this.widgetDetail === widget.id) this.widgetDetail = null;   // 详情弹窗目标被删 → 关闭
       } catch (e) {
         alert('删除节点小面板失败：' + e.message);
       }
@@ -804,6 +784,20 @@ createApp({
     },
     closeWidgetSettings() {
       this.widgetSettings = null;
+    },
+
+    // ---------- 节点小面板详情大弹窗（双击锁定面板的小面板打开；点击弹窗外空白处自动关闭） ----------
+    /** 双击节点小面板：仅面板锁定时打开详情大弹窗（解锁态双击保留给拖动/缩放，不干扰）。 */
+    onWidgetDblclick(w) {
+      if (this.panelEditable) return;
+      this.openWidgetDetail(w);
+    },
+    openWidgetDetail(w) {
+      this.widgetDetail = w.id;
+      this.ensureWidgetCharts();   // 立即拉取详情图表数据（面板放不下小图表时也要拉）
+    },
+    closeWidgetDetail() {
+      this.widgetDetail = null;
     },
     /** 保存图表设置（显示开关 + 时间范围；PUT；面板锁定不拦截——显示偏好，非结构性修改）。 */
     async saveWidgetSettings() {
@@ -871,12 +865,14 @@ createApp({
     miniChartLabel(key) {
       return key === 'temperature' ? '温度' : key === 'humidity' ? '湿度' : '电量';
     },
-    /** 拉取当前面板里需要展示曲线的图表数据（缓存未过期且数据未更新则跳过，防并发）。 */
+    /** 拉取当前面板里需要展示曲线的图表数据（缓存未过期且数据未更新则跳过，防并发）。
+     * 详情大弹窗固定展示三条曲线：不受面板尺寸/显示开关影响，始终拉取。 */
     ensureWidgetCharts() {
       for (const w of this.widgetsOfSelected) {
         if (w._chartFetching) continue;
+        const isDetail = this.widgetDetail === w.id;
         const need = this.chartFlag(w, 'show_temp') || this.chartFlag(w, 'show_hum') || this.chartFlag(w, 'show_bat');
-        if (!need || !this.showCharts(w)) continue;
+        if (!isDetail && (!need || !this.showCharts(w))) continue;
         const cache = this.widgetCharts[w.id];
         // 时间范围改变时即使数据未更新也重拉（窗口不同数据不同）
         if (cache && cache.range === (w.chart_range || '1d')
@@ -969,7 +965,9 @@ createApp({
         };
       });
     },
-    /** 曲线纵轴「好看」范围：把数据 min/max 撑成 ≥3 个圆整刻度，返回刻度列表（供网格与曲线共用同一坐标）。 */
+    /** 曲线纵轴「好看」范围：以圆整刻度把数据 min/max 完全包住（下界 ≤min、上界 ≥max），且 ≥3 个刻度。
+     * 返回刻度列表与刻度步长（供网格、曲线与标签小数位共用同一坐标）。
+     * 注意：范围必须覆盖数据区间，否则曲线尖峰/谷底会超出 y 轴被裁切。 */
     seriesYRange(w, key) {
       const cache = this.widgetCharts[w.id];
       const pts = cache ? cache.points : [];
@@ -981,11 +979,15 @@ createApp({
         if (hi === null || v > hi) hi = v;
       }
       if (lo === null) return null;
-      if (hi - lo < 1e-9) {   // 全为同一值：向两侧撑开，保证还能出 ≥3 刻度
-        const pad = Math.max(Math.abs(hi) * 0.01, 1e-3);
+      // 最小「有意义」跨度：数据波动低于它时按常量向两侧撑开——既保证能出 ≥3 个可读刻度，
+      // 也避免把亚传感器分辨率的噪声放大成满幅波动（同时范围始终包住数据，曲线不会顶出边界）。
+      const minSpan = key === 'temperature' ? 0.5 : key === 'humidity' ? 2 : 0.1;
+      const span = hi - lo;
+      if (span < minSpan) {
+        const pad = (minSpan - span) / 2;
         lo -= pad; hi += pad;
       }
-      // 圆整步长：向下取 1/2/2.5/5 × 10^n，保证刻度数只增不减
+      // 圆整步长：向下取 1/2/2.5/5 × 10^n
       const niceStep = (raw) => {
         if (!(raw > 0)) return 1e-9;
         const pow = Math.pow(10, Math.floor(Math.log10(raw)));
@@ -993,16 +995,23 @@ createApp({
         const n = mag < 1.5 ? 1 : mag < 3 ? 2 : mag < 3.5 ? 2.5 : mag < 7 ? 5 : 10;
         return n * pow;
       };
-      let step = niceStep((hi - lo) / 2);   // 目标 ≥3 刻度
-      let ticks = [];
-      while (true) {                        // 极小跨度时 step 取整会丢刻度：缩半步长重算
-        const start = Math.ceil(lo / step - 1e-9) * step;
-        ticks = [];
-        for (let v = start; v <= hi + step * 1e-6; v += step) ticks.push(v);
-        if (ticks.length >= 3) break;
+      // 目标 ~2 步覆盖数据；不足 3 刻度则缩半步长重算。下界取 ≤lo 的最大刻度、上界取 ≥hi 的最小刻度。
+      let step = niceStep((hi - lo) / 2);
+      let yLo = null, yHi = null;
+      for (let guard = 0; guard < 60; guard++) {
+        const a = Math.floor(lo / step + 1e-9) * step;
+        const b = Math.ceil(hi / step - 1e-9) * step;
+        if (b - a >= step * 2 - 1e-9) {   // 至少 3 个刻度
+          yLo = a; yHi = b;
+          break;
+        }
         step = niceStep(step * 0.5);
       }
-      return { yLo: ticks[0], yHi: ticks[ticks.length - 1], ticks };
+      if (yLo === null) return null;
+      const ticks = [];
+      for (let v = yLo; v <= yHi + step * 1e-6; v += step) ticks.push(v);
+      if (ticks.length < 3) ticks.push(yHi);   // 浮点边界兜底：保证 ≥3
+      return { yLo: ticks[0], yHi: ticks[ticks.length - 1], ticks, step };
     },
     /** y 轴刻度值（≥3 个）：位置随网格线，首尾贴边、中间居中，避免重叠/裁切。 */
     yTicksFor(w, key) {
@@ -1017,20 +1026,29 @@ createApp({
       }
       const H = 60, P = 2;
       const n = ticks.length;
+      const decimals = this.tickDecimals(r.step, key);
       return ticks.map((v, i) => {
         const y = P + (H - P * 2) * (1 - (v - r.yLo) / (r.yHi - r.yLo));
         let style;
         if (i === 0) style = { bottom: '1px' };                       // 底部刻度贴边
         else if (i === n - 1) style = { top: '1px' };                 // 顶部刻度贴边
         else style = { top: (y / H * 100) + '%', transform: 'translateY(-50%)' };
-        return { v, y, label: this.fmtY(v, key), style };
+        return { v, y, label: this.fmtY(v, key, decimals), style };
       });
     },
-    /** 刻度数值格式化：温度 1 位小数、湿度取整、电量 2 位小数。 */
-    fmtY(v, key) {
-      if (key === 'temperature') return v.toFixed(1);
-      if (key === 'humidity') return String(Math.round(v));
-      return v.toFixed(2);   // battery
+    /** 刻度标签小数位：保证相邻刻度显示互不相同——步长越小小数位越多（step ≥ 10^-d 时 d 位可区分），
+     * 同时不低于各量程的自然精度（温度 1 位、电量 2 位、湿度取整）。 */
+    tickDecimals(step, key) {
+      const base = key === 'temperature' ? 1 : key === 'battery' ? 2 : 0;
+      const need = step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step)));
+      return Math.max(base, need);
+    },
+    /** 刻度数值格式化：小数位随刻度步长自适应（窄范围自动增位，避免标签重复如 25.3、25.3）。 */
+    fmtY(v, key, decimals) {
+      if (key === 'humidity') {
+        return decimals > 0 ? v.toFixed(decimals) : String(Math.round(v));
+      }
+      return v.toFixed(decimals);   // temperature / battery
     },
     /** 生成 0..100 × 0..60 坐标系内的迷你折线 points：x 按真实时间、y 按圆整刻度区间，与网格线一致。 */
     sparkPoints(w, key) {
@@ -1092,6 +1110,11 @@ createApp({
       }
     };
     document.addEventListener('click', this._closeMenu);
+    // Esc 关闭详情大弹窗
+    this._closeDetailEsc = (e) => {
+      if (e.key === 'Escape' && this.widgetDetail) this.closeWidgetDetail();
+    };
+    document.addEventListener('keydown', this._closeDetailEsc);
     // 恢复登录态：本地有 token 则调 /api/auth/me 校验，有效则直接进入主界面
     let savedAuth = null;
     try { savedAuth = JSON.parse(localStorage.getItem('monitor.auth')); } catch (err) { /* 忽略 */ }
@@ -1113,5 +1136,6 @@ createApp({
     this.pollTimer = null;
     if (this.measureObs) { this.measureObs.disconnect(); this.measureObs = null; }
     if (this._closeMenu) document.removeEventListener('click', this._closeMenu);
+    if (this._closeDetailEsc) document.removeEventListener('keydown', this._closeDetailEsc);
   },
 }).mount('#app');

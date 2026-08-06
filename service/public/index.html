@@ -74,12 +74,14 @@
           <div class="stage" :style="stageStyle">
             <div v-for="w in widgetsOfSelected" :key="w.id"
                  class="node-panel widget"
-                 :class="{ stale: w.stale, editable: panelEditable, dragging: dragState && dragState.id === w.id }"
+                 :class="{ stale: w.stale, editable: panelEditable, dblclickable: !panelEditable, dragging: dragState && dragState.id === w.id }"
                  :style="widgetStyle(w)"
+                 :title="panelEditable ? '拖动调整位置，右下角手柄调整大小' : '双击查看详情'"
                  @pointerdown="startWidgetDrag($event, w)"
                  @pointermove="onWidgetDrag($event, w)"
                  @pointerup="endWidgetDrag($event, w)"
-                 @pointercancel="endWidgetDrag($event, w)">
+                 @pointercancel="endWidgetDrag($event, w)"
+                 @dblclick="onWidgetDblclick(w)">
               <div class="node-head">
                 <span class="node-name">{{ widgetName(w) }}</span>
                 <span class="head-right">
@@ -216,7 +218,7 @@
           <p class="sub">点击上方「＋ 添加服务器」创建第一条连接</p>
         </div>
         <div v-for="conn in mqttConns" :key="conn.id" class="mqtt-conn-card">
-          <!-- 头部：服务器名称 · 连接状态 · 节点数 -->
+          <!-- 头部：服务器名称 · 连接状态 · 主题数 -->
           <div class="mqtt-conn-head">
             <label class="check" :title="conn.enabled ? '已启用' : '已停用'">
               <input type="checkbox" v-model="conn.enabled" @change="toggleConnEnabled(conn)">
@@ -272,6 +274,17 @@
                       <option value="switch">开关（待支持）</option>
                     </select>
                     <span class="mono topic-name" :title="t.topic">{{ t.topic }}</span>
+                    <!-- 主题后展示该主题最新上报节点的数据 / 状态 / 时间 -->
+                    <span class="topic-latest" :title="t.latest ? '节点 ' + t.latest.name + ' · 最近上报 ' + t.latest.last_seen : '该主题尚未收到节点数据'">
+                      <template v-if="t.latest">
+                        <span class="tl-data">{{ fmtTemp(t.latest.temperature) }} / {{ t.latest.humidity != null ? t.latest.humidity + '%' : '--' }}</span>
+                        <span class="tl-sep">·</span>
+                        <span class="tl-status" :class="t.latest.stale ? 'off' : 'on'">{{ t.latest.stale ? '离线' : '在线' }}</span>
+                        <span class="tl-sep">·</span>
+                        <span class="tl-time">{{ fmtSeen(t.latest.last_seen) }}</span>
+                      </template>
+                      <span v-else class="tl-none">暂无数据</span>
+                    </span>
                     <button class="topic-del" type="button" title="删除该主题" @click="removeConnTopic(conn, i)">✕</button>
                   </div>
                 </div>
@@ -291,82 +304,11 @@
               <button class="btn" @click="clearMqttPassword(conn)">清除密码</button>
             </div>
           </div>
-
-          <!-- 该连接上报的节点（可折叠） -->
-          <div class="conn-nodes">
-            <div class="conn-nodes-head" @click="conn.showNodes = !conn.showNodes" title="点击收起/展开">
-              <span class="conn-nodes-title">节点</span>
-              <span class="gw-count">{{ nodesForConn(conn.id).length }} 个</span>
-              <span class="conn-nodes-toggle">
-                <span>{{ conn.showNodes ? '折叠' : '展开' }}</span>
-                <span class="conn-nodes-caret">{{ conn.showNodes ? '▴' : '▾' }}</span>
-              </span>
-            </div>
-            <div v-show="conn.showNodes" class="conn-nodes-body">
-              <div v-if="nodesForConn(conn.id).length === 0" class="topic-empty">
-                该连接尚未上报任何节点，节点上报后会自动出现在这里
-              </div>
-              <div v-for="node in nodesForConn(conn.id)" :key="nodeKey(node)" class="node-row-item">
-                <div class="row-main">
-                  <div class="node-name-text">{{ node.effective_name }}</div>
-                  <div class="row-sub">
-                    <span class="mono">#{{ node.device_id }}</span>
-                    <span class="type-badge" v-if="node.device_type">{{ node.device_type }}</span>
-                    <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '--' }}</span>
-                    <span v-if="node.stale" class="warn"> · 离线</span>
-                  </div>
-                  <div class="row-sub" v-if="node.topic">
-                    <span class="mono node-topic" :title="node.topic">{{ node.topic }}</span>
-                  </div>
-                </div>
-                <div class="row-time" :title="node.last_seen || ''">
-                  {{ node.last_seen ? fmtSeen(node.last_seen) : '--' }}
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
-
-      <!-- 未关联到任何连接的节点（连接被删 / 旧数据迁移） -->
-      <div v-if="unassignedGroups.length > 0" class="unassigned-block">
-        <div class="gateway-header">
-          <span class="gw-id">未关联连接的节点</span>
-          <span class="gw-count">{{ unassignedNodes.length }} 个</span>
-        </div>
-        <div class="node-list">
-          <div v-for="group in unassignedGroups" :key="'u' + group.gateway_id" class="gateway-group">
-            <div class="gateway-header">
-              <span class="gw-id">gateway_{{ group.gateway_id }}</span>
-              <span class="gw-count">{{ group.nodes.length }} 个节点</span>
-            </div>
-            <div v-for="node in group.nodes" :key="nodeKey(node)" class="node-row-item">
-              <div class="row-main">
-                <div class="node-name-text">{{ node.effective_name }}</div>
-                <div class="row-sub">
-                  <span class="mono">#{{ node.device_id }}</span>
-                  <span class="type-badge" v-if="node.device_type">{{ node.device_type }}</span>
-                  <span v-if="node.temperature != null"> · {{ fmtTemp(node.temperature) }} / {{ node.humidity != null ? node.humidity + '%' : '--' }}</span>
-                  <span v-if="node.stale" class="warn"> · 离线</span>
-                </div>
-                <div class="row-sub" v-if="node.topic">
-                  <span class="mono node-topic" :title="node.topic">{{ node.topic }}</span>
-                </div>
-              </div>
-              <div class="row-time" :title="node.last_seen || ''">
-                {{ node.last_seen ? fmtSeen(node.last_seen) : '--' }}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="nodes.length === 0" class="empty-hint subs-empty">
-        <p>尚未发现任何节点</p>
-        <p class="sub">节点首次上报（约每 5 分钟）后会自动出现在对应连接下</p>
       </div>
 
       <div class="mqtt-tip">
+        每个主题会显示其最新上报节点的数据 / 状态 / 时间；仅订阅主题列表内的节点会被监听，其余节点的数据不采集；
         主题的增删即时生效：在线连接直接增量订阅，无需重连；取消订阅的主题会从各面板移除对应节点小面板；
         服务器地址、端口、账号、密码、启停等连接级参数需点「保存并重连」；
         密码不回显，留空表示不修改；每个主题可配置节点名字与类型（当前仅温湿度，其余类型待支持）；
@@ -436,6 +378,64 @@
           <button class="btn primary" @click="saveWidgetSettings" :disabled="widgetSettings.saving">
             {{ widgetSettings.saving ? '保存中…' : '保存' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 节点小面板详情大弹窗：双击锁定面板的节点小面板打开；点击弹窗外空白处自动关闭 -->
+    <div v-if="detailWidget" class="detail-mask" @click.self="closeWidgetDetail">
+      <div class="detail-modal" role="dialog" aria-modal="true">
+        <div class="detail-head">
+          <div class="detail-title">
+            <span class="detail-name">{{ widgetName(detailWidget) }}</span>
+            <span v-if="detailWidget.stale" class="stale-badge">离线</span>
+            <span class="detail-topic" :title="detailWidget.topic">{{ detailWidget.topic }}</span>
+          </div>
+          <button class="modal-close" title="关闭" @click="closeWidgetDetail">✕</button>
+        </div>
+        <!-- 当前温湿度 + 电量 -->
+        <div class="detail-stats">
+          <div class="detail-stat">
+            <span class="detail-stat-label">温度</span>
+            <span class="detail-stat-value temp">{{ fmtTemp(detailWidget.temperature) }}</span>
+          </div>
+          <div class="detail-stat">
+            <span class="detail-stat-label">湿度</span>
+            <span class="detail-stat-value hum">{{ detailWidget.humidity != null ? detailWidget.humidity + ' %' : '--' }}</span>
+          </div>
+          <div class="detail-stat">
+            <span class="detail-stat-label">电量</span>
+            <span class="detail-stat-value bat">{{ batteryText(detailWidget) }}</span>
+          </div>
+        </div>
+        <!-- 温度 / 湿度 / 电量 三条曲线，垂直布局 -->
+        <div class="detail-charts">
+          <div v-for="key in detailChartKeys" :key="key" class="detail-chart">
+            <div class="detail-chart-head">
+              <span class="mini-chart-title" :class="miniChartClass(key)">{{ miniChartLabel(key) }}</span>
+            </div>
+            <template v-if="hasSpark(detailWidget, key)">
+              <div class="spark-wrap">
+                <div class="spark-plot">
+                  <svg class="spark" viewBox="0 0 100 60" preserveAspectRatio="none">
+                    <line v-for="xt in xTicksFor(detailWidget, key)" :key="'dxv' + xt.x" class="spark-grid spark-grid-v"
+                          :x1="xt.x" y1="0" :x2="xt.x" y2="60" vector-effect="non-scaling-stroke"/>
+                    <line v-for="yt in yTicksFor(detailWidget, key)" :key="'dyh' + yt.v" class="spark-grid spark-grid-h"
+                          x1="0" :y1="yt.y" x2="100" :y2="yt.y" vector-effect="non-scaling-stroke"/>
+                    <polyline :points="sparkPoints(detailWidget, key)"
+                              :class="['spark-line', miniChartClass(key)]" vector-effect="non-scaling-stroke"/>
+                  </svg>
+                  <span v-for="yt in yTicksFor(detailWidget, key)" :key="'dyl' + yt.v" class="spark-ytick detail-ytick"
+                        :style="yt.style">{{ yt.label }}</span>
+                </div>
+                <div class="spark-xaxis">
+                  <span v-for="xt in xTicksFor(detailWidget, key)" :key="'dxl' + xt.x" class="spark-xtick detail-xtick"
+                        :style="xt.style">{{ xt.label }}</span>
+                </div>
+              </div>
+            </template>
+            <div v-else class="spark-empty">暂无数据</div>
+          </div>
         </div>
       </div>
     </div>
