@@ -38,6 +38,7 @@ function widgetToJson(w) {
     show_hum: w.show_hum !== 0,
     show_bat: w.show_bat !== 0,
     chart_range: w.chart_range || '1d',
+    chart_layout: w.chart_layout || 'v',
   };
 }
 
@@ -119,7 +120,7 @@ router.put('/widgets/:id', (req, res) => {
   res.json(widgetToJson(db.updateWidgetLayout(req.user.id, id, x, y, w, h)));
 });
 
-/** 小面板图表设置（显示温度/湿度/电量曲线 + 时间范围）。部分更新；面板锁定不拦截（显示偏好，非结构性修改）。 */
+/** 小面板图表设置（显示温度/湿度/电量曲线 + 时间范围 + 布局）。部分更新；面板锁定不拦截（显示偏好，非结构性修改）。 */
 router.put('/widgets/:id/settings', (req, res) => {
   const id = Number(req.params.id);
   if (!db.getWidget(req.user.id, id)) return res.status(404).json({ detail: '节点小面板不存在' });
@@ -133,6 +134,12 @@ router.put('/widgets/:id/settings', (req, res) => {
       return res.status(400).json({ detail: `不支持的时间范围：${b.chart_range}` });
     }
     settings.chart_range = String(b.chart_range);
+  }
+  if (b.chart_layout !== undefined) {
+    if (b.chart_layout !== 'v' && b.chart_layout !== 'h') {
+      return res.status(400).json({ detail: `不支持的图表布局：${b.chart_layout}` });
+    }
+    settings.chart_layout = String(b.chart_layout);
   }
   if (!Object.keys(settings).length) return res.status(400).json({ detail: '没有可更新的设置项' });
   res.json(widgetToJson(db.updateWidgetSettings(req.user.id, id, settings)));

@@ -69,6 +69,15 @@
             : '右侧展开面板可为它添加节点小面板；拖动小面板可调整位置，拖动四边可调整大小' }}</span>
         </div>
 
+        <!-- 主页面缩放控制：底部中间，加减按钮 + 当前缩放百分比（100% = 窗口等比铺满的默认尺寸） -->
+        <div class="stage-zoom">
+          <button class="zoom-btn" title="缩小" @click="zoomOut" :disabled="zoomPct <= zoomMin">−</button>
+          <span class="zoom-pct">{{ zoomPct }}%</span>
+          <button class="zoom-btn" title="放大" @click="zoomIn" :disabled="zoomPct >= zoomMax">＋</button>
+        </div>
+
+        <!-- 主舞台滚动容器：舞台超出显示区域时在此内部滚动，不撑高/撑宽页面、不影响浏览器滚动条 -->
+        <div class="stage-scroll">
         <!-- 主舞台：2560×1440 虚拟舞台等比缩放，小面板按坐标绝对定位（面板解锁时可拖动/缩放） -->
         <template v-if="selectedPanel">
           <div class="stage" :style="stageStyle">
@@ -91,11 +100,15 @@
                 </span>
               </div>
               <template v-if="w.type === 'thermo'">
-                <div class="node-temp">{{ fmtTemp(w.temperature) }}</div>
-                <div class="node-row">💧 湿度 {{ w.humidity != null ? w.humidity + ' %' : '--' }}</div>
-                <div class="node-row">🔋 电池 {{ batteryText(w) }}</div>
-                <div class="node-row sub" v-if="w.rssi != null">信号 {{ w.rssi }} dBm</div>
-                <!-- 曲线小图表：纵向堆叠、按布局均分剩余高度；放不下就只显示前面几个，不挤压不滚动 -->
+                <!-- 内容区：默认纵向（基础信息在上、曲线区在下）；水平布局改为横向一行（基础信息在左、曲线区在右） -->
+                <div class="node-body" :class="{ 'layout-h': widgetChartLayout(w) === 'h' }">
+                <div class="node-info">
+                  <div class="node-temp">{{ fmtTemp(w.temperature) }}</div>
+                  <div class="node-row">💧 湿度 {{ w.humidity != null ? w.humidity + ' %' : '--' }}</div>
+                  <div class="node-row">🔋 电池 {{ batteryText(w) }}</div>
+                  <div class="node-row sub" v-if="w.rssi != null">信号 {{ w.rssi }} dBm</div>
+                </div>
+                <!-- 曲线小图表：按布局排列（垂直堆叠 / 水平并排）；放不下就只显示前面几个，不挤压不滚动 -->
                 <div class="node-charts" v-if="showCharts(w)">
                   <div v-for="key in chartsToShow(w)" :key="key" class="mini-chart">
                     <span class="mini-chart-title" :class="miniChartClass(key)">{{ miniChartLabel(key) }}</span>
@@ -125,6 +138,7 @@
                     <span v-else class="spark-empty">暂无数据</span>
                   </div>
                 </div>
+                </div>
               </template>
               <div v-else class="node-row sub">该类型待支持（{{ w.type }}）</div>
               <!-- 编辑态：四条边为拖拽缩放手柄（对边固定、被拖边跟随；四个角留空可拖动移动） -->
@@ -142,9 +156,10 @@
           </div>
         </template>
 
-        <div v-else class="empty-hint">
-          <p>暂无面板</p>
-          <p class="sub">点击右侧「＋ 添加面板」创建一个面板</p>
+          <div v-else class="empty-hint">
+            <p>暂无面板</p>
+            <p class="sub">点击右侧「＋ 添加面板」创建一个面板</p>
+          </div>
         </div>
       </div>
 
@@ -156,7 +171,7 @@
              @pointerdown="startRailResize"></div>
         <button class="rail-toggle" @click="sideRailCollapsed = !sideRailCollapsed"
                 :title="sideRailCollapsed ? '展开侧边栏' : '收起侧边栏'">
-          {{ sideRailCollapsed ? '◀' : '▶' }}
+          {{ sideRailCollapsed ? '<<' : '>>' }}
         </button>
         <template v-if="!sideRailCollapsed">
           <button class="btn rail-btn add-panel-btn" @click="addPanel">＋ 添加面板</button>
@@ -377,7 +392,14 @@
               <option v-for="r in chartRanges" :key="r.key" :value="r.key">{{ r.label }}</option>
             </select>
           </label>
-          <p class="modal-tip">勾选后该节点小面板显示对应曲线小图表；时间范围为曲线横轴显示多久的数据（默认近 1 天）。面板尺寸过小时自动隐藏全部图表，仅显示数据。</p>
+          <label class="modal-field">
+            <span class="modal-field-label">图表布局</span>
+            <select class="modal-select" v-model="widgetSettings.chart_layout">
+              <option value="v">垂直布局</option>
+              <option value="h">水平布局</option>
+            </select>
+          </label>
+          <p class="modal-tip">勾选后该节点小面板显示对应曲线小图表；时间范围为曲线横轴显示多久的数据（默认近 1 天）。布局选「水平」时曲线横向排列，宽度不够自动隐藏后面的曲线。面板尺寸过小时自动隐藏全部图表，仅显示数据。</p>
         </div>
         <div class="modal-foot">
           <button class="btn" @click="closeWidgetSettings">取消</button>

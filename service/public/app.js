@@ -10,13 +10,21 @@ const STAGE_H = 1440;
 const WIDGET_MIN_W = 120;   // 与后端 MIN_W 一致（public/style.css .node-panel min-width）
 const WIDGET_MIN_H = 90;    // 与后端 MIN_H 一致（public/style.css .node-panel min-height）
 const SNAP = 10;            // 位置/尺寸吸附网格：10px 倍数，方便对齐
+const ZOOM_STEP = 5;        // 主页面缩放：每次点击 ±5%
+const ZOOM_MIN = 50;        // 最小缩放 50%
+const ZOOM_MAX = 200;       // 最大缩放 200%
 
-// 曲线小图表显示规则（响应式）：图表区为纵向堆叠、按布局均分剩余高度；
-// 放不下全部就只显示前面的几个（温度→湿度→电量），绝不挤压、不用滚动区。
+// 曲线小图表显示规则（响应式）：图表区按设置布局排列（垂直堆叠看高度 / 水平并排看宽度）、
+// 均分剩余空间；放不下全部就只显示前面的几个（温度→湿度→电量），绝不挤压、不用滚动区。
 // 渲染尺寸 = 舞台坐标 × stageScale，随窗口缩放变化，才反映面板"够不够显示"。
 const CHART_MIN_W = 110;        // 渲染宽度低于此 → 隐藏全部图表（略低于面板 CSS 最小宽 120，让边界面板也能出图）
-const CHART_INFO_H = 165;       // 数字信息区（节点名/温度/湿度/电量/信号 + 内边距）估算高度
-const CHART_ROW_MIN = 66;       // 每个曲线行占用高度（含行距 + 底部时间轴行）：不够 → 少显示前面几个
+const CHART_INFO_H = 165;       // 垂直布局：数字信息区（节点名/温度/湿度/电量/信号 + 内边距）估算高度
+const CHART_ROW_MIN = 66;       // 垂直布局：每个曲线行占用高度（含行距 + 底部时间轴行）：不够 → 少显示前面几个
+const CHART_H_PAD = 32;         // 面板左右内边距（style.css .node-panel padding 16px × 2），水平布局算可用宽度时扣除
+const CHART_INFO_W = 108;       // 水平布局：基础信息列宽度（.node-info 100px + 与曲线区间距 8px），算曲线区可用宽度时扣除
+const CHART_HEAD_H = 60;        // 水平布局：曲线区上方占位高度（节点头部 + 面板上下内边距），算曲线区可用高度时扣除
+const CHART_COL_MIN_W = 88;     // 水平布局：每条曲线列的最小宽度（与 style.css .node-body.layout-h .mini-chart min-width 一致）
+const CHART_ROW_H_MIN = 46;     // 水平布局：曲线区最低高度（标题 + 图区 + 底部时间轴）：不够 → 隐藏全部图表
 const CHART_REFRESH_MS = 120000;   // 曲线数据缓存有效期（节点约 5 分钟一报，2 分钟足够新）
 const CHART_LIMIT = 300;           // 曲线目标点数（后端按此抽稀，mini 图足够密又不至于拖慢渲染）
 
@@ -82,7 +90,9 @@ createApp({
       sideRailMin: 160,          // 拖拽最小宽度
       sideRailMax: 480,          // 拖拽最大宽度
       railResizing: false,       // 是否正在拖拽调节宽度
-      stageScale: 1,             // 虚拟舞台等比缩放系数（由容器尺寸计算）
+      stageScale: 1,             // 虚拟舞台渲染缩放系数 = 容器适配基准 × 用户缩放百分比
+      baseScale: 1,              // 容器适配基准缩放系数（窗口等比铺满舞台的尺寸，由容器测量）
+      zoomPct: 100,              // 用户缩放百分比（100 = 默认铺满视图，加减按钮每次 ±5%）
       dragState: null,           // 小面板拖拽状态 { id, mode, startX, startY, origX, origY, origW, origH }
       measureObs: null,          // 舞台尺寸监听（ResizeObserver）
       pollTimer: null,
@@ -109,6 +119,13 @@ createApp({
     // 当前面板是否可编辑（未锁定）：可拖动/缩放小面板
     panelEditable() {
       return this.selectedPanel && !this.selectedPanel.locked;
+    },
+    // 缩放范围边界（模板禁用按钮用，常量透出）
+    zoomMin() {
+      return ZOOM_MIN;
+    },
+    zoomMax() {
+      return ZOOM_MAX;
     },
     // 虚拟舞台渲染尺寸：等比缩放保持 2560:1440，居中铺在舞台容器内
     stageStyle() {
@@ -545,14 +562,28 @@ createApp({
         height: (w.h * s) + 'px',
       };
     },
-    /** 测量主舞台容器尺寸，更新虚拟舞台缩放系数（等比缩放居中）。 */
+    /** 测量主舞台容器尺寸，更新容器适配基准缩放系数（等比缩放居中）。 */
     measureStage() {
       const box = this.$refs.stageBox;
       if (!box) return;
       const w = box.clientWidth;
       const h = box.clientHeight;
-      this.stageScale = w > 0 && h > 0 ? Math.min(w / STAGE_W, h / STAGE_H) : 1;
+      this.baseScale = w > 0 && h > 0 ? Math.min(w / STAGE_W, h / STAGE_H) : 1;
+      this.applyZoom();
+    },
+    /** 按用户缩放百分比更新虚拟舞台渲染缩放系数（100% = 窗口等比铺满的默认尺寸）。 */
+    applyZoom() {
+      this.stageScale = (this.baseScale || 1) * (this.zoomPct / 100);
       this.ensureWidgetCharts();   // 面板缩放变化 → 尺寸足够/不足时图表随之出现/隐藏
+    },
+    /** 放大/缩小视图：每次 ±5%，夹在 [ZOOM_MIN, ZOOM_MAX] 内。 */
+    zoomIn() {
+      this.zoomPct = Math.min(ZOOM_MAX, this.zoomPct + ZOOM_STEP);
+      this.applyZoom();
+    },
+    zoomOut() {
+      this.zoomPct = Math.max(ZOOM_MIN, this.zoomPct - ZOOM_STEP);
+      this.applyZoom();
     },
     /** 开始拖动小面板：命中四边手柄 → 调整大小（对边固定、被拖边跟随），否则移动位置（仅面板未锁定）。 */
     startWidgetDrag(e, w) {
@@ -799,6 +830,7 @@ createApp({
         show_hum: w.show_hum !== false,
         show_bat: w.show_bat !== false,
         chart_range: w.chart_range || '1d',
+        chart_layout: w.chart_layout || 'v',
         saving: false,
       };
     },
@@ -900,6 +932,7 @@ createApp({
             show_hum: s.show_hum,
             show_bat: s.show_bat,
             chart_range: s.chart_range,
+            chart_layout: s.chart_layout,
           }),
         });
         const w = this.widgets.find((x) => x.id === s.widgetId);
@@ -908,6 +941,7 @@ createApp({
           w.show_hum = updated.show_hum;
           w.show_bat = updated.show_bat;
           w.chart_range = updated.chart_range;
+          w.chart_layout = updated.chart_layout;
         }
         this.closeWidgetSettings();
         this.ensureWidgetCharts();   // 立即按新设置拉取/隐藏图表
@@ -921,15 +955,27 @@ createApp({
     chartFlag(w, key) {
       return w ? w[key] !== false : true;
     },
-    /** 该面板能显示几个曲线：按剩余高度计算，放不下就少显示前面的几个，绝不挤压/滚动。 */
+    /** 小面板图表布局：v=垂直（默认）, h=水平。 */
+    widgetChartLayout(w) {
+      return w && w.chart_layout === 'h' ? 'h' : 'v';
+    },
+    /** 该面板能显示几个曲线：按布局分别计算（垂直看高度、水平看宽度），放不下就少显示前面的几个，绝不挤压/滚动。 */
     chartCount(w) {
       const s = this.stageScale || 1;
       if ((w.w * s) < CHART_MIN_W) return 0;
-      const avail = (w.h * s) - CHART_INFO_H;
-      if (avail < CHART_ROW_MIN) return 0;
       const enabled = (this.chartFlag(w, 'show_temp') ? 1 : 0)
                     + (this.chartFlag(w, 'show_hum') ? 1 : 0)
                     + (this.chartFlag(w, 'show_bat') ? 1 : 0);
+      if (this.widgetChartLayout(w) === 'h') {
+        // 水平布局：基础信息在左、曲线区在右；宽度（扣除内边距 + 信息列）决定能放几个，曲线区高度不够就不显示
+        const availW = (w.w * s) - CHART_H_PAD - CHART_INFO_W;
+        const availH = (w.h * s) - CHART_HEAD_H;
+        if (availH < CHART_ROW_H_MIN) return 0;
+        return Math.max(0, Math.min(enabled, Math.floor(availW / CHART_COL_MIN_W)));
+      }
+      // 垂直布局：按剩余高度计算
+      const avail = (w.h * s) - CHART_INFO_H;
+      if (avail < CHART_ROW_MIN) return 0;
       return Math.max(0, Math.min(enabled, Math.floor(avail / CHART_ROW_MIN)));
     },
     /** 面板是否显示图表区（至少能放下一个曲线）。 */

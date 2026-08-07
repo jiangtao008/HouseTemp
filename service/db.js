@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS topic_panels (
     show_hum      INTEGER NOT NULL DEFAULT 1,  -- 显示湿度曲线
     show_bat      INTEGER NOT NULL DEFAULT 1,  -- 显示电量曲线
     chart_range   TEXT    NOT NULL DEFAULT '1d', -- 曲线时间范围：1h/6h/1d/3d/7d/15d/1M/3M/6M/1Y
+    chart_layout  TEXT    NOT NULL DEFAULT 'v', -- 曲线布局：v=垂直, h=水平
     UNIQUE (panel_id, connection_id, topic)
 );
 `;
@@ -383,6 +384,15 @@ function migrateWidgetChartRange() {
   }
 }
 
+/** topic_panels 增加图表布局列（chart_layout，默认 v=垂直）。按列存在性幂等。 */
+function migrateWidgetChartLayout() {
+  const cols = db.prepare('PRAGMA table_info(topic_panels)').all();
+  if (!cols.some((c) => c.name === 'chart_layout')) {
+    db.exec("ALTER TABLE topic_panels ADD COLUMN chart_layout TEXT NOT NULL DEFAULT 'v'");
+    console.log('topic_panels 已增加 chart_layout 列（曲线布局，默认垂直）');
+  }
+}
+
 function init(cfg) {
   fs.mkdirSync(path.dirname(cfg.database.path), { recursive: true });
   db = new Database(cfg.database.path);
@@ -399,6 +409,7 @@ function init(cfg) {
   migratePanelLocked();
   migrateWidgetChartFlags();
   migrateWidgetChartRange();
+  migrateWidgetChartLayout();
 }
 
 // ---------------------------------------------------------------------------
@@ -812,7 +823,7 @@ function updateWidgetLayout(userId, id, x, y, w, h) {
   return getWidget(userId, id);
 }
 
-/** 部分更新小面板图表设置（show_temp/show_hum/show_bat/chart_range，undefined 不修改）。 */
+/** 部分更新小面板图表设置（show_temp/show_hum/show_bat/chart_range/chart_layout，undefined 不修改）。 */
 function updateWidgetSettings(userId, id, settings) {
   const sets = [];
   const params = { user_id: userId, id };
@@ -825,6 +836,10 @@ function updateWidgetSettings(userId, id, settings) {
   if (settings.chart_range !== undefined) {
     sets.push('chart_range = @chart_range');
     params.chart_range = settings.chart_range;
+  }
+  if (settings.chart_layout !== undefined) {
+    sets.push('chart_layout = @chart_layout');
+    params.chart_layout = settings.chart_layout;
   }
   if (!sets.length) return getWidget(userId, id);
   db.prepare(`UPDATE topic_panels SET ${sets.join(', ')} WHERE user_id = @user_id AND id = @id`).run(params);
