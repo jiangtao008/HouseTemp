@@ -390,6 +390,9 @@
             <span class="detail-name">{{ widgetName(detailWidget) }}</span>
             <span v-if="detailWidget.stale" class="stale-badge">离线</span>
             <span class="detail-topic" :title="detailWidget.topic">{{ detailWidget.topic }}</span>
+            <select class="detail-range" v-model="detailRange" @change="onDetailRangeChange" title="曲线时间范围">
+              <option v-for="r in chartRanges" :key="r.key" :value="r.key">{{ r.label }}</option>
+            </select>
           </div>
           <button class="modal-close" title="关闭" @click="closeWidgetDetail">✕</button>
         </div>

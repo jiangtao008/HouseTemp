@@ -91,6 +91,7 @@ createApp({
       addingConn: false,
       widgetSettings: null,     // 节点小面板图表设置弹窗 { widgetId, name, show_temp, show_hum, show_bat, chart_range, saving }
       widgetDetail: null,       // 节点小面板详情大弹窗：当前展示的小面板 id（双击锁定面板的小面板打开）
+      detailRange: '1d',        // 详情大弹窗的时间范围（与设置一致，默认近 1 天）
       widgetCharts: {},         // 曲线数据缓存：widgetId -> { points, lastSeen, fetchedAt }
     };
   },
@@ -162,7 +163,7 @@ createApp({
       // 清空上一用户的数据，避免下一用户短暂看到缓存
       this.panels = []; this.widgets = []; this.availableNodes = [];
       this.mqttConns = []; this.users = []; this.widgetCharts = {};
-      this.selectedPanelId = null; this.widgetSettings = null; this.widgetDetail = null;
+      this.selectedPanelId = null; this.widgetSettings = null; this.widgetDetail = null; this.detailRange = '1d';
       // 释放舞台监听，重新登录后再建（旧 stageBox 已随 v-else 移除）
       if (this.measureObs) { this.measureObs.disconnect(); this.measureObs = null; }
       try { localStorage.removeItem('monitor.auth'); } catch (e) { /* 忽略 */ }
@@ -794,10 +795,16 @@ createApp({
     },
     openWidgetDetail(w) {
       this.widgetDetail = w.id;
+      this.detailRange = '1d';   // 默认近 1 天
       this.ensureWidgetCharts();   // 立即拉取详情图表数据（面板放不下小图表时也要拉）
     },
     closeWidgetDetail() {
       this.widgetDetail = null;
+    },
+    /** 详情大弹窗时间范围下拉变化：清掉旧范围缓存并按新范围重拉（避免短暂显示旧范围数据）。 */
+    onDetailRangeChange() {
+      if (this.widgetDetail) delete this.widgetCharts[this.widgetDetail];
+      this.ensureWidgetCharts();
     },
     /** 保存图表设置（显示开关 + 时间范围；PUT；面板锁定不拦截——显示偏好，非结构性修改）。 */
     async saveWidgetSettings() {
@@ -866,28 +873,31 @@ createApp({
       return key === 'temperature' ? '温度' : key === 'humidity' ? '湿度' : '电量';
     },
     /** 拉取当前面板里需要展示曲线的图表数据（缓存未过期且数据未更新则跳过，防并发）。
-     * 详情大弹窗固定展示三条曲线：不受面板尺寸/显示开关影响，始终拉取。 */
+     * 详情大弹窗固定展示三条曲线：按弹窗选中的时间范围单独拉取，不受面板尺寸/显示开关影响。 */
     ensureWidgetCharts() {
       for (const w of this.widgetsOfSelected) {
         if (w._chartFetching) continue;
         const isDetail = this.widgetDetail === w.id;
-        const need = this.chartFlag(w, 'show_temp') || this.chartFlag(w, 'show_hum') || this.chartFlag(w, 'show_bat');
-        if (!isDetail && (!need || !this.showCharts(w))) continue;
+        const range = isDetail ? this.detailRange : (w.chart_range || '1d');
+        if (!isDetail) {
+          const need = this.chartFlag(w, 'show_temp') || this.chartFlag(w, 'show_hum') || this.chartFlag(w, 'show_bat');
+          if (!need || !this.showCharts(w)) continue;
+        }
         const cache = this.widgetCharts[w.id];
         // 时间范围改变时即使数据未更新也重拉（窗口不同数据不同）
-        if (cache && cache.range === (w.chart_range || '1d')
+        if (cache && cache.range === range
             && cache.lastSeen === w.last_seen && (Date.now() - cache.fetchedAt) < CHART_REFRESH_MS) continue;
         w._chartFetching = true;
-        this.fetchWidgetChart(w).finally(() => { w._chartFetching = false; });
+        this.fetchWidgetChart(w, range).finally(() => { w._chartFetching = false; });
       }
     },
-    async fetchWidgetChart(w) {
+    async fetchWidgetChart(w, range) {
       try {
-        const range = w.chart_range || '1d';
-        const res = await this.api(`/api/panels/widgets/${w.id}/telemetry?limit=${CHART_LIMIT}&range=${encodeURIComponent(range)}`);
+        const r = range || w.chart_range || '1d';
+        const res = await this.api(`/api/panels/widgets/${w.id}/telemetry?limit=${CHART_LIMIT}&range=${encodeURIComponent(r)}`);
         this.widgetCharts = {
           ...this.widgetCharts,
-          [w.id]: { points: res.points || [], range, lastSeen: w.last_seen, fetchedAt: Date.now() },
+          [w.id]: { points: res.points || [], range: r, lastSeen: w.last_seen, fetchedAt: Date.now() },
         };
       } catch (e) {
         console.warn('刷新图表数据失败', e);

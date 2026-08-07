@@ -1054,6 +1054,20 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 详情大弹窗头部的曲线时间范围下拉（与设置弹窗同一套选项，默认近 1 天） */
+.detail-range {
+  flex: none;
+  max-width: 132px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #e6e9f2;
+  background: #262936;
+  border: 1px solid #3a3f52;
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+}
+.detail-range:focus-visible { border-color: #3b5bdb; }
 /* 当前温湿度 + 电量：三张统计卡并排 */
 .detail-stats {
   display: flex;
