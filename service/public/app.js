@@ -92,6 +92,7 @@ createApp({
       widgetSettings: null,     // 节点小面板图表设置弹窗 { widgetId, name, show_temp, show_hum, show_bat, chart_range, saving }
       widgetDetail: null,       // 节点小面板详情大弹窗：当前展示的小面板 id（双击锁定面板的小面板打开）
       detailRange: '1d',        // 详情大弹窗的时间范围（与设置一致，默认近 1 天）
+      detailHover: null,        // 详情大弹窗曲线十字线：{ key, x, y }（0..100 × 0..60 坐标系）
       widgetCharts: {},         // 曲线数据缓存：widgetId -> { points, lastSeen, fetchedAt }
     };
   },
@@ -163,7 +164,8 @@ createApp({
       // 清空上一用户的数据，避免下一用户短暂看到缓存
       this.panels = []; this.widgets = []; this.availableNodes = [];
       this.mqttConns = []; this.users = []; this.widgetCharts = {};
-      this.selectedPanelId = null; this.widgetSettings = null; this.widgetDetail = null; this.detailRange = '1d';
+      this.selectedPanelId = null; this.widgetSettings = null; this.widgetDetail = null;
+      this.detailRange = '1d'; this.detailHover = null;
       // 释放舞台监听，重新登录后再建（旧 stageBox 已随 v-else 移除）
       if (this.measureObs) { this.measureObs.disconnect(); this.measureObs = null; }
       try { localStorage.removeItem('monitor.auth'); } catch (e) { /* 忽略 */ }
@@ -552,21 +554,24 @@ createApp({
       this.stageScale = w > 0 && h > 0 ? Math.min(w / STAGE_W, h / STAGE_H) : 1;
       this.ensureWidgetCharts();   // 面板缩放变化 → 尺寸足够/不足时图表随之出现/隐藏
     },
-    /** 开始拖动小面板：命中右下角手柄 → 调整大小，否则移动位置（仅面板未锁定）。 */
+    /** 开始拖动小面板：命中四边手柄 → 调整大小（对边固定、被拖边跟随），否则移动位置（仅面板未锁定）。 */
     startWidgetDrag(e, w) {
       if (!this.panelEditable) return;
       if (e.pointerType === 'mouse' && e.button !== 0) return;   // 仅左键
       e.preventDefault();
-      const resize = !!e.target.closest('.resize-handle');
+      const handle = e.target.closest('.resize-edge');
+      const edge = handle ? handle.getAttribute('data-edge') : null;
       this.dragState = {
         id: w.id,
-        mode: resize ? 'resize' : 'move',
+        mode: edge ? 'resize' : 'move',
+        edge,
         startX: e.clientX,
         startY: e.clientY,
         origX: w.x, origY: w.y, origW: w.w, origH: w.h,
       };
       e.currentTarget.setPointerCapture(e.pointerId);
-      e.currentTarget.style.cursor = resize ? 'nwse-resize' : 'grabbing';
+      const CURSORS = { left: 'ew-resize', right: 'ew-resize', top: 'ns-resize', bottom: 'ns-resize' };
+      e.currentTarget.style.cursor = edge ? CURSORS[edge] : 'grabbing';
     },
     onWidgetDrag(e, w) {
       const d = this.dragState;
@@ -576,13 +581,27 @@ createApp({
       const dx = (e.clientX - d.startX) / s;   // 屏幕位移 → 舞台坐标位移
       const dy = (e.clientY - d.startY) / s;
       const snap = (v) => Math.round(v / SNAP) * SNAP;   // 吸附到 10px 网格
-      if (d.mode === 'resize') {
-        // 固定左上角，右下角跟随鼠标；夹取最小/最大尺寸后再吸附
-        w.w = snap(Math.min(Math.max(d.origW + dx, WIDGET_MIN_W), STAGE_W - d.origX));
-        w.h = snap(Math.min(Math.max(d.origH + dy, WIDGET_MIN_H), STAGE_H - d.origY));
-      } else {
+      if (d.mode === 'move') {
         w.x = snap(Math.min(Math.max(d.origX + dx, 0), STAGE_W - w.w));
         w.y = snap(Math.min(Math.max(d.origY + dy, 0), STAGE_H - w.h));
+        return;
+      }
+      // 四边缩放：对边固定，被拖边跟随鼠标（左/上边同时改动坐标与尺寸，右/下边只改尺寸）
+      switch (d.edge) {
+        case 'left':
+          w.x = snap(Math.min(Math.max(d.origX + dx, 0), d.origX + d.origW - WIDGET_MIN_W));
+          w.w = d.origX + d.origW - w.x;
+          break;
+        case 'right':
+          w.w = snap(Math.min(Math.max(d.origW + dx, WIDGET_MIN_W), STAGE_W - d.origX));
+          break;
+        case 'top':
+          w.y = snap(Math.min(Math.max(d.origY + dy, 0), d.origY + d.origH - WIDGET_MIN_H));
+          w.h = d.origY + d.origH - w.y;
+          break;
+        case 'bottom':
+          w.h = snap(Math.min(Math.max(d.origH + dy, WIDGET_MIN_H), STAGE_H - d.origY));
+          break;
       }
     },
     endWidgetDrag(e, w) {
@@ -800,11 +819,72 @@ createApp({
     },
     closeWidgetDetail() {
       this.widgetDetail = null;
+      this.detailHover = null;
     },
     /** 详情大弹窗时间范围下拉变化：清掉旧范围缓存并按新范围重拉（避免短暂显示旧范围数据）。 */
     onDetailRangeChange() {
       if (this.widgetDetail) delete this.widgetCharts[this.widgetDetail];
+      this.detailHover = null;
       this.ensureWidgetCharts();
+    },
+
+    // ---------- 详情大弹窗曲线十字线 ----------
+    /** 鼠标在曲线图上移动：记录十字线位置（夹到数据区，保证线不越界）。 */
+    onDetailChartMove(e, key) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const X = 100, Y = 60, P = 2;
+      const rx = (e.clientX - rect.left) / rect.width * X;
+      const ry = (e.clientY - rect.top) / rect.height * Y;
+      this.detailHover = {
+        key,
+        x: Math.min(Math.max(rx, P), X - P),
+        y: Math.min(Math.max(ry, P), Y - P),
+      };
+    },
+    onDetailChartLeave() {
+      this.detailHover = null;
+    },
+    /** 十字线 x 轴时间标签：按鼠标 x 位置换算窗口内时间，格式随窗口跨度自适应。 */
+    timeAtX(h) {
+      const w = this.detailWidget;
+      if (!w || !h) return null;
+      const win = this.chartWindow(w);
+      if (!win) return null;
+      const X = 100, P = 2;
+      const t = win.t0 + ((h.x - P) / (X - P * 2)) * win.span;
+      return this.fmtCrossTime(t, win.span);
+    },
+    /** 十字线 y 轴数值标签：按鼠标 y 位置换算该曲线圆整刻度区间内的数值。 */
+    yValueAt(h, key) {
+      const w = this.detailWidget;
+      if (!w || !h) return '--';
+      const yr = this.seriesYRange(w, key);
+      if (!yr) return '--';
+      const Y = 60, P = 2;
+      const v = yr.yHi - ((h.y - P) / (Y - P * 2)) * (yr.yHi - yr.yLo);
+      return this.fmtY(v, key, this.tickDecimals(yr.step, key));   // 与刻度标签一致的小数位
+    },
+    /** 十字线时间格式化：<1 天只显示时分，<3 个月显示月日时分，更长显示日期。 */
+    fmtCrossTime(t, span) {
+      const d = new Date(t);
+      if (isNaN(d.getTime())) return '--';
+      const p = (n) => String(n).padStart(2, '0');
+      const hhmm = p(d.getHours()) + ':' + p(d.getMinutes());
+      if (span <= 24 * 3600e3) return hhmm;
+      if (span <= 90 * 24 * 3600e3) return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${hhmm}`;
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    },
+    crosshairDotStyle(h) {
+      return { left: (h.x / 100 * 100) + '%', top: (h.y / 60 * 100) + '%' };
+    },
+    crosshairYStyle(h) {
+      return { top: (h.y / 60 * 100) + '%', transform: 'translateY(-50%)' };
+    },
+    crosshairXStyle(h) {
+      const pct = (h.x / 100 * 100) + '%';
+      const transform = h.x < 14 ? 'translateX(0)' : h.x > 86 ? 'translateX(-100%)' : 'translateX(-50%)';
+      return { left: pct, transform };
     },
     /** 保存图表设置（显示开关 + 时间范围；PUT；面板锁定不拦截——显示偏好，非结构性修改）。 */
     async saveWidgetSettings() {
@@ -1053,10 +1133,10 @@ createApp({
       const need = step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step)));
       return Math.max(base, need);
     },
-    /** 刻度数值格式化：小数位随刻度步长自适应（窄范围自动增位，避免标签重复如 25.3、25.3）。 */
+    /** 刻度数值格式化：小数位随刻度步长自适应（窄范围自动增位，避免标签重复如 25.3、25.3）；湿度 y 轴显示百分比。 */
     fmtY(v, key, decimals) {
       if (key === 'humidity') {
-        return decimals > 0 ? v.toFixed(decimals) : String(Math.round(v));
+        return (decimals > 0 ? v.toFixed(decimals) : String(Math.round(v))) + '%';
       }
       return v.toFixed(decimals);   // temperature / battery
     },

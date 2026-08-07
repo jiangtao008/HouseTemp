@@ -66,7 +66,7 @@
         <div class="stage-toolbar">
           <span class="stage-hint">{{ selectedPanel && selectedPanel.locked
             ? '右侧展开面板可为它添加节点小面板，数据到达自动刷新（🔒 当前面板已锁定，仅查看）'
-            : '右侧展开面板可为它添加节点小面板；拖动小面板可调整位置，右下角手柄可调整大小' }}</span>
+            : '右侧展开面板可为它添加节点小面板；拖动小面板可调整位置，拖动四边可调整大小' }}</span>
         </div>
 
         <!-- 主舞台：2560×1440 虚拟舞台等比缩放，小面板按坐标绝对定位（面板解锁时可拖动/缩放） -->
@@ -76,7 +76,7 @@
                  class="node-panel widget"
                  :class="{ stale: w.stale, editable: panelEditable, dblclickable: !panelEditable, dragging: dragState && dragState.id === w.id }"
                  :style="widgetStyle(w)"
-                 :title="panelEditable ? '拖动调整位置，右下角手柄调整大小' : '双击查看详情'"
+                 :title="panelEditable ? '拖动调整位置，拖动四边调整大小' : '双击查看详情'"
                  @pointerdown="startWidgetDrag($event, w)"
                  @pointermove="onWidgetDrag($event, w)"
                  @pointerup="endWidgetDrag($event, w)"
@@ -127,7 +127,13 @@
                 </div>
               </template>
               <div v-else class="node-row sub">该类型待支持（{{ w.type }}）</div>
-              <div v-if="panelEditable" class="resize-handle" title="拖动调整大小"></div>
+              <!-- 编辑态：四条边为拖拽缩放手柄（对边固定、被拖边跟随；四个角留空可拖动移动） -->
+              <template v-if="panelEditable">
+                <div class="resize-edge resize-edge-top" data-edge="top" title="拖动调整高度"></div>
+                <div class="resize-edge resize-edge-bottom" data-edge="bottom" title="拖动调整高度"></div>
+                <div class="resize-edge resize-edge-left" data-edge="left" title="拖动调整宽度"></div>
+                <div class="resize-edge resize-edge-right" data-edge="right" title="拖动调整宽度"></div>
+              </template>
             </div>
           </div>
           <div v-if="widgetsOfSelected.length === 0" class="widget-empty">
@@ -419,7 +425,7 @@
             </div>
             <template v-if="hasSpark(detailWidget, key)">
               <div class="spark-wrap">
-                <div class="spark-plot">
+                <div class="spark-plot" @mousemove="onDetailChartMove($event, key)" @mouseleave="onDetailChartLeave">
                   <svg class="spark" viewBox="0 0 100 60" preserveAspectRatio="none">
                     <line v-for="xt in xTicksFor(detailWidget, key)" :key="'dxv' + xt.x" class="spark-grid spark-grid-v"
                           :x1="xt.x" y1="0" :x2="xt.x" y2="60" vector-effect="non-scaling-stroke"/>
@@ -427,13 +433,27 @@
                           x1="0" :y1="yt.y" x2="100" :y2="yt.y" vector-effect="non-scaling-stroke"/>
                     <polyline :points="sparkPoints(detailWidget, key)"
                               :class="['spark-line', miniChartClass(key)]" vector-effect="non-scaling-stroke"/>
+                    <!-- 十字线：竖线/横线随鼠标位置移动 -->
+                    <template v-if="detailHover && detailHover.key === key">
+                      <line class="crosshair-line crosshair-v" :x1="detailHover.x" y1="0" :x2="detailHover.x" y2="60"/>
+                      <line class="crosshair-line crosshair-h" x1="0" :y1="detailHover.y" x2="100" :y2="detailHover.y"/>
+                    </template>
                   </svg>
                   <span v-for="yt in yTicksFor(detailWidget, key)" :key="'dyl' + yt.v" class="spark-ytick detail-ytick"
                         :style="yt.style">{{ yt.label }}</span>
+                  <!-- 十字线：交点圆点 + y 轴数值标签 -->
+                  <template v-if="detailHover && detailHover.key === key">
+                    <span class="crosshair-dot" :style="crosshairDotStyle(detailHover)"></span>
+                    <span class="crosshair-ylabel" :style="crosshairYStyle(detailHover)">{{ yValueAt(detailHover, key) }}</span>
+                  </template>
                 </div>
                 <div class="spark-xaxis">
                   <span v-for="xt in xTicksFor(detailWidget, key)" :key="'dxl' + xt.x" class="spark-xtick detail-xtick"
                         :style="xt.style">{{ xt.label }}</span>
+                  <!-- x 轴时间标签：鼠标 x 对应的时间 -->
+                  <template v-if="detailHover && detailHover.key === key && timeAtX(detailHover) != null">
+                    <span class="crosshair-xlabel" :style="crosshairXStyle(detailHover)">{{ timeAtX(detailHover) }}</span>
+                  </template>
                 </div>
               </div>
             </template>
