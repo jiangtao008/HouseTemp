@@ -49,21 +49,6 @@ platformio run --target upload
 platformio device monitor -b 115200
 ```
 
-## 模拟模式
-
-如果没有连接 SHT40 传感器，可通过编译标志启用模拟数据：
-
-```ini
-# platformio.ini
-build_flags =
-  -std=gnu++17
-  -DSIMULATE_SENSOR    # 取消此行注释以启用模拟模式
-```
-
-模拟数据范围：
-- 温度：22.0 ~ 28.0 °C（带随机漂移）
-- 湿度：40 ~ 70 %（与温度呈轻微负相关）
-
 ## BLE 广播协议
 
 传感器节点以 **不可连接广播 (Non-connectable advertising)** 方式发送数据包，结构如下：

@@ -42,7 +42,7 @@ constexpr uint8_t TFT_SCLK_PIN = 12;
 constexpr uint8_t TFT_MOSI_PIN = 11;
 constexpr int8_t TFT_MISO_PIN = -1;
 constexpr uint8_t TFT_BACKLIGHT_PIN = 7;
-constexpr uint8_t TAB_BUTTON_PIN = 14;
+constexpr uint8_t TAB_BUTTON_PIN = 13;  // 网关面板/节点面板 切换按键（按下=低电平）
 constexpr uint32_t DISPLAY_REFRESH_MS = 500;
 constexpr size_t MAX_DISPLAY_NODES = 8;
 

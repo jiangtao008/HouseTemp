@@ -1,0 +1,23 @@
+服务已启动: http://0.0.0.0:8000
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ECONNRESET
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature

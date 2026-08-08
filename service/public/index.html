@@ -289,8 +289,9 @@
                 <div class="topic-list">
                   <div v-if="conn.topics.length === 0" class="topic-empty">尚未添加主题，支持 +/# 通配符</div>
                   <div v-for="(t, i) in conn.topics" :key="i" class="topic-row">
-                    <input class="topic-label" v-model="t.name" placeholder="节点名字" title="节点名字">
-                    <select class="topic-type" v-model="t.type" title="主题类型">
+                    <input class="topic-label" v-model="t.name" placeholder="节点名字" title="节点名字"
+                           @change="applyTopics(conn)" @keyup.enter="applyTopics(conn)">
+                    <select class="topic-type" v-model="t.type" title="主题类型" @change="applyTopics(conn)">
                       <option value="thermo">温湿度</option>
                       <option value="switch">开关（待支持）</option>
                     </select>

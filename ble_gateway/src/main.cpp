@@ -27,6 +27,7 @@ void loop()   { test_lvgl_loop(); }
 
 // ── Normal application code ──────────────────────────────────────────────
 #include <Arduino.h>
+#include <esp_system.h>
 #include <NimBLEDevice.h>
 
 #include "ble_scan.h"
@@ -52,32 +53,48 @@ class SensorScanCallback : public NimBLEScanCallbacks {
     if (!verify_sensor_packet(packet)) {
       return;
     }
-    if (!accept_packet_counter(packet.device_id, packet.counter)) {
+    if (!accept_sensor_report(packet.device_id)) {
       return;
     }
 
-    const float temperature = packet.temperature / 100.0f;
-    const float battery_v = packet.battery_mv / 1000.0f;
-
-    DisplayNodeData node_data{};
-    node_data.device_id = packet.device_id;
-    node_data.temperature = temperature;
-    node_data.humidity = packet.humidity;
-    node_data.battery_mv = packet.battery_mv;
-    node_data.rssi = device->getRSSI();
-    node_data.counter = packet.counter;
-    node_data.last_seen_ms = millis();
-    display_upsert_node(node_data);
-
-    mqtt_publish_sensor(packet.device_id, temperature, packet.humidity, battery_v, device->getRSSI());
+    // Hand the packet to the main loop. Never touch the display or MQTT from
+    // this callback — it runs in the NimBLE host task, while the Arduino loop
+    // task is also using them. LVGL and PubSubClient are not thread-safe, so
+    // all display + MQTT work happens single-threaded in loop().
+    enqueue_sensor_packet(packet, device->getRSSI());
   }
 };
 
 static SensorScanCallback scan_callback;
 
+// ESP-IDF in this Arduino core has esp_reset_reason() but no string mapper,
+// so keep a small lookup here for the boot log.
+static const char *reset_reason_str(esp_reset_reason_t reason) {
+  switch (reason) {
+    case ESP_RST_POWERON:   return "power-on";
+    case ESP_RST_EXT:       return "external pin";
+    case ESP_RST_SW:        return "software restart (esp_restart)";
+    case ESP_RST_PANIC:     return "PANIC / exception / abort";
+    case ESP_RST_INT_WDT:   return "interrupt watchdog";
+    case ESP_RST_TASK_WDT:  return "task watchdog timeout";
+    case ESP_RST_WDT:       return "watchdog";
+    case ESP_RST_DEEPSLEEP: return "deep-sleep wake";
+    case ESP_RST_BROWNOUT:  return "brownout (power dip)";
+    case ESP_RST_SDIO:      return "sdio";
+    default:                return "unknown";
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(200);
+
+  // Record why we booted: if the gateway keeps restarting, this tells us
+  // whether it was a panic (Guru Meditation / abort), a task watchdog, or a
+  // brownout. Also log free heap so leaks are visible across reboots.
+  Serial.printf("[boot] reset reason: %s | free heap: %u bytes | psram: %s\n",
+                reset_reason_str(esp_reset_reason()), ESP.getFreeHeap(),
+                psramFound() ? "yes" : "no");
 
   config_load();
 
@@ -86,11 +103,9 @@ void setup() {
 
   display_init();
 
-  // Show gateway name + id on screen（id 即 MQTT 主题中的 gateway_<id>）
-  char gateway_label[64];
-  snprintf(gateway_label, sizeof(gateway_label), "%s #%lu",
-           gateway_config.gateway_name, (unsigned long)gateway_config.gateway_id);
-  display_set_gateway_name(gateway_label);
+  // 网关 ID 由网关页的独立"ID"行展示（见 display.cpp build_gateway_tab），
+  // 此处仅显示名称，避免与 ID 行重复。
+  display_set_gateway_name(gateway_config.gateway_name);
 
   // Refresh display before the potentially-long blocking operations
   // that follow, so the user sees the initial UI immediately.
@@ -118,21 +133,49 @@ void loop() {
   serial_config_update();
   display_update();
 
-  if (!wifi_is_connected()) {
-    wifi_connect();
+  // Drain the BLE queue on the main task (the scan callback only enqueues —
+  // see SensorScanCallback::onResult). This keeps LVGL and PubSubClient
+  // single-threaded, and moves any display/MQTT work out of the NimBLE host
+  // task. The display updates even while the network is down.
+  QueuedSensorPacket entry;
+  while (dequeue_sensor_packet(entry)) {
+    const float temperature = entry.packet.temperature / 100.0f;
+    const float battery_v = entry.packet.battery_mv / 1000.0f;
+
+    DisplayNodeData node_data{};
+    node_data.device_id = entry.packet.device_id;
+    node_data.temperature = temperature;
+    node_data.humidity = entry.packet.humidity;
+    node_data.battery_mv = entry.packet.battery_mv;
+    node_data.rssi = entry.rssi;
+    node_data.counter = entry.packet.counter;
+    node_data.last_seen_ms = millis();
+    display_upsert_node(node_data);
+
+    // Publish only over a live link. The wifi_is_connected() guard covers the
+    // window where mqtt_client.connected() is still stale-true after the link
+    // dropped, so we never publish into a dead socket.
+    if (mqtt_is_connected() && wifi_is_connected()) {
+      mqtt_publish_sensor(entry.packet.device_id, temperature,
+                          entry.packet.humidity, battery_v, entry.rssi);
+    }
   }
-  if (!mqtt_connect()) {
-    display_set_gateway_status(wifi_is_connected(), false);
-    display_set_gateway_network(wifi_ip_string(), wifi_signal_rssi());
-    display_update();
-    delay(1000);
-    return;
+
+  // Non-blocking network maintenance: wifi_connect() returns immediately
+  // (async begin, throttled to 3 s), and mqtt_connect() never runs while WiFi
+  // is down and is otherwise throttled to one ≤5 s socket-timeout stall per
+  // 5 s window. Either way loop() stays a tight ~10 ms cycle, so the display
+  // refreshes on schedule even when the network is down.
+  wifi_connect();
+  if (wifi_is_connected()) {
+    mqtt_connect();
+    if (mqtt_is_connected()) {
+      mqtt_loop();
+    }
   }
 
   display_set_gateway_status(wifi_is_connected(), mqtt_is_connected());
   display_set_gateway_network(wifi_ip_string(), wifi_signal_rssi());
-  display_update();
-  mqtt_loop();
   delay(10);
 }
 

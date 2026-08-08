@@ -402,6 +402,7 @@ createApp({
         conn.newTopicName = newTopicName;
         conn.newTopicType = newTopicType;
         conn.showConfig = showConfig;
+        this.refreshPanels();   // 主题名/类型可能已改，同步主舞台小面板名字
       } catch (e) {
         alert('保存连接失败：' + e.message);
       } finally {

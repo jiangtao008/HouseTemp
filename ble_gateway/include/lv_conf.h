@@ -7,11 +7,11 @@
 /* Color depth: 16-bit RGB565 */
 #define LV_COLOR_DEPTH 16
 
-/* Use PSRAM if available on ESP32-S3 */
-#define LV_MEM_POOL_INCLUDE <esp32-hal-psram.h>
-#define LV_MEM_POOL_ALLOC ps_malloc
-
-/* Size of LVGL's dynamic memory (16 KB) */
+/* LVGL uses a static internal-RAM pool (see lv_mem.c: without LV_MEM_POOL_ALLOC
+   it allocates a fixed array in .bss). Do NOT point this at ps_malloc: the
+   default esp32-s3-devkitc-1 module has no PSRAM, and ps_malloc() would return
+   NULL there, breaking every LVGL allocation. 32 KB out of 320 KB internal RAM
+   is a fair price for running on any ESP32-S3 variant. */
 #define LV_MEM_SIZE (32 * 1024)
 
 /* Max FPS */
