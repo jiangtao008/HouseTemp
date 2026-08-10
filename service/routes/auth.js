@@ -130,6 +130,26 @@ router.get('/me', (req, res) => {
   res.json({ username: session.username, role: session.role, userId: session.user_id });
 });
 
+/** 修改自己的密码：先校验旧密码，再写入新密码（哈希后落库）。 */
+router.put('/password', (req, res) => {
+  const token = parseBearer(req.headers.authorization);
+  if (!token) return res.status(401).json({ detail: '未登录' });
+  const session = db.getSession(token);
+  if (!session) return res.status(401).json({ detail: '登录已失效' });
+  const body = req.body || {};
+  const oldPassword = String(body.oldPassword == null ? '' : body.oldPassword);
+  const newPassword = String(body.newPassword == null ? '' : body.newPassword);
+  if (!oldPassword || !newPassword) return res.status(400).json({ detail: '请输入旧密码和新密码' });
+  if (newPassword.length < 6) return res.status(400).json({ detail: '新密码至少 6 位' });
+  const user = db.getUserById(session.user_id);
+  if (!user) return res.status(404).json({ detail: '用户不存在' });
+  if (!verifyPassword(oldPassword, user.password_hash)) {
+    return res.status(400).json({ detail: '旧密码不正确' });
+  }
+  db.setUserPassword(user.id, hashPassword(newPassword));
+  res.json({ ok: true });
+});
+
 // ---------------------------------------------------------------------------
 // 初始管理员引导
 // ---------------------------------------------------------------------------

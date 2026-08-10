@@ -71,6 +71,10 @@ createApp({
       role: '',                  // 'admin' | 'user'
       userId: null,              // 当前用户 id（用户管理里禁用删除自己）
       userMenuOpen: false,       // 右上角用户下拉菜单
+      changePwdOpen: false,      // 修改密码弹窗是否打开
+      changePwdSaving: false,    // 修改密码请求进行中
+      changePwdError: '',        // 修改密码错误提示
+      changePwdForm: { oldPassword: '', newPassword: '' },  // 修改密码表单（旧密码 + 新密码）
       loginTab: 'login',         // 登录页当前 Tab：'login' | 'register'
       loginForm: { username: '', password: '' },
       registerForm: { username: '', password: '', confirm: '' },
@@ -177,7 +181,7 @@ createApp({
     },
     clearAuth() {
       this.token = ''; this.username = ''; this.role = ''; this.userId = null;
-      this.authed = false; this.userMenuOpen = false; this.tab = 'main';
+      this.authed = false; this.userMenuOpen = false; this.changePwdOpen = false; this.tab = 'main';
       // 清空上一用户的数据，避免下一用户短暂看到缓存
       this.panels = []; this.widgets = []; this.availableNodes = [];
       this.mqttConns = []; this.users = []; this.widgetCharts = {};
@@ -248,6 +252,41 @@ createApp({
     goAdminUsers() {
       this.userMenuOpen = false;
       this.switchTab('users');
+    },
+
+    // ---------- 修改密码（右上角用户下拉菜单进入） ----------
+    openChangePwd() {
+      this.userMenuOpen = false;
+      this.changePwdForm = { oldPassword: '', newPassword: '' };
+      this.changePwdError = '';
+      this.changePwdOpen = true;
+    },
+    closeChangePwd() {
+      this.changePwdOpen = false;
+      this.changePwdError = '';
+    },
+    /** 确认修改：前端做基本校验，服务端先验证旧密码再更新新密码；结果用 alert 提示。 */
+    async saveChangePwd() {
+      const oldPassword = this.changePwdForm.oldPassword;
+      const newPassword = this.changePwdForm.newPassword;
+      if (!oldPassword || !newPassword) { this.changePwdError = '请输入旧密码和新密码'; return; }
+      if (newPassword.length < 6) { this.changePwdError = '新密码至少 6 位'; return; }
+      this.changePwdSaving = true; this.changePwdError = '';
+      try {
+        await this.api('/api/auth/password', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ oldPassword, newPassword }),
+        });
+        this.changePwdOpen = false;
+        this.changePwdError = '';
+        alert('密码修改成功');
+      } catch (e) {
+        // 「旧密码不正确」等校验错误由服务端返回，展示在弹窗内
+        this.changePwdError = e.message;
+      } finally {
+        this.changePwdSaving = false;
+      }
     },
     async loadUsers() {
       try {

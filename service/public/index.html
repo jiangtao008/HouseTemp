@@ -54,6 +54,7 @@
         <span class="user-caret">▾</span>
         <div v-show="userMenuOpen" class="user-menu" @click.stop>
           <button v-if="role === 'admin'" class="user-menu-item" @click="goAdminUsers">用户管理</button>
+          <button class="user-menu-item" @click="openChangePwd">修改密码</button>
           <button class="user-menu-item danger" @click="logout">退出登录</button>
         </div>
       </div>
@@ -406,6 +407,31 @@
           <button class="btn" @click="closeWidgetSettings">取消</button>
           <button class="btn primary" @click="saveWidgetSettings" :disabled="widgetSettings.saving">
             {{ widgetSettings.saving ? '保存中…' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改密码弹窗：右上角用户下拉菜单进入；先校验旧密码，成功后提示结果 -->
+    <div v-if="changePwdOpen" class="modal-mask">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <span class="modal-title">修改密码</span>
+          <button class="modal-close" title="关闭" @click="closeChangePwd">✕</button>
+        </div>
+        <div class="modal-body">
+          <label class="login-label">旧密码</label>
+          <input class="login-input" type="password" v-model="changePwdForm.oldPassword"
+                 placeholder="请输入当前密码" autocomplete="current-password">
+          <label class="login-label">新密码</label>
+          <input class="login-input" type="password" v-model="changePwdForm.newPassword"
+                 placeholder="请输入新密码（至少 6 位）" autocomplete="new-password">
+          <p v-if="changePwdError" class="login-error">{{ changePwdError }}</p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" @click="closeChangePwd">取消</button>
+          <button class="btn primary" @click="saveChangePwd" :disabled="changePwdSaving">
+            {{ changePwdSaving ? '提交中…' : '确认修改' }}
           </button>
         </div>
       </div>
