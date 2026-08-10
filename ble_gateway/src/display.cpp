@@ -7,7 +7,6 @@
 #include <cstring>
 
 #include "config.h"
-#include "node_registry.h"
 #include "status.h"
 
 LV_FONT_DECLARE(my_font_16);
@@ -33,10 +32,9 @@ constexpr size_t kMaxNodeRows = 8;  // must match MAX_DISPLAY_NODES
 
 // Column x positions for the node table (240 px wide)
 constexpr lv_coord_t kColID    = 8;
-constexpr lv_coord_t kColName  = 44;
-constexpr lv_coord_t kColTemp  = 100;
-constexpr lv_coord_t kColHum   = 146;
-constexpr lv_coord_t kColBat   = 180;
+constexpr lv_coord_t kColTemp  = 60;
+constexpr lv_coord_t kColHum   = 120;
+constexpr lv_coord_t kColBat   = 166;
 // Row layout
 constexpr lv_coord_t kHeaderY    = 6;
 constexpr lv_coord_t kSepY       = 24;
@@ -88,7 +86,6 @@ lv_obj_t *no_nodes_label = nullptr;
 
 struct RowWidgets {
     lv_obj_t *id;
-    lv_obj_t *name;
     lv_obj_t *temp;
     lv_obj_t *hum;
     lv_obj_t *bat;
@@ -313,7 +310,6 @@ static void build_gateway_tab(lv_obj_t *parent) {
 static void build_nodes_tab(lv_obj_t *parent) {
     // Column headers
     make_label(parent, "ID",   &style_title, kColID,   kHeaderY);
-    make_label(parent, "名称", &style_title, kColName, kHeaderY);
     make_label(parent, "温度", &style_title, kColTemp, kHeaderY);
     make_label(parent, "湿度", &style_title, kColHum,  kHeaderY);
     make_label(parent, "电池", &style_title, kColBat,  kHeaderY);
@@ -333,8 +329,6 @@ static void build_nodes_tab(lv_obj_t *parent) {
     for (size_t i = 0; i < kMaxNodeRows; ++i) {
         rows[i].id   = make_label(parent, "", &style_value,
                                   kColID,   kRowStartY + i * kRowStep);
-        rows[i].name = make_label(parent, "", &style_label,
-                                  kColName, kRowStartY + i * kRowStep);
         rows[i].temp = make_label(parent, "", &style_value,
                                   kColTemp, kRowStartY + i * kRowStep);
         rows[i].hum  = make_label(parent, "", &style_value,
@@ -390,7 +384,13 @@ static void poll_button() {
     static bool latched = false;
     if (!level && !latched) {
         current_page = (current_page == 0) ? 1 : 0;
-        lv_tabview_set_act(tabview, current_page, LV_ANIM_ON);
+        // 该 raw-SPI 驱动对 dirty-area 刷新不可靠（见 display_set_gateway_network），
+        // 仅靠 lv_tabview_set_act + 下一次 lv_timer_handler() 不一定触发可见重绘，
+        // 画面会滞后到下一次强制全屏刷新（网络/节点更新）才切换。因此关动画立即
+        // 切换，并显式强制一次全屏刷新，保证按下即切换。
+        lv_tabview_set_act(tabview, current_page, LV_ANIM_OFF);
+        lv_obj_invalidate(lv_scr_act());
+        lv_refr_now(lv_disp_get_default());
         latched = true;
     } else if (level) {
         latched = false;
@@ -412,7 +412,7 @@ static int active_node_count() {
 // 离线：整行置灰，数值列改为 "Offline" 占位；在线：去掉置灰样式，
 // 数值由 display_upsert_node 随后重写。
 static void set_row_offline(size_t slot, bool offline) {
-    lv_obj_t *labels[] = {rows[slot].id, rows[slot].name, rows[slot].temp,
+    lv_obj_t *labels[] = {rows[slot].id, rows[slot].temp,
                           rows[slot].hum, rows[slot].bat};
     if (offline) {
         for (auto *lbl : labels) {
@@ -672,8 +672,6 @@ void display_upsert_node(const DisplayNodeData &node) {
 
     snprintf(buf, sizeof(buf), "%u", node.device_id);
     lv_label_set_text(rows[slot].id, buf);
-
-    lv_label_set_text(rows[slot].name, node_name_for_id(node.device_id));
 
     snprintf(buf, sizeof(buf), "%.1f\xC2\xB0" "C", node.temperature);
     lv_label_set_text(rows[slot].temp, buf);
