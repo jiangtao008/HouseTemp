@@ -4,6 +4,8 @@
 
 #include "ble_adv.h"
 #include "config.h"
+#include "config_mode.h"
+#include "node_config.h"
 #include "sht40.h"
 
 // ---- 调试开关 ----
@@ -20,7 +22,8 @@ RTC_DATA_ATTR uint32_t packet_counter = 0;
 // 上电（冷启动）时打印完整的节点配置信息，便于串口诊断。
 void print_node_info() {
   Serial.println("===== Sensor Node Info =====");
-  Serial.printf("Device ID:       %u\n", DEVICE_ID);
+  Serial.printf("Device ID:       %u\n", node_config::device_id());
+  Serial.printf("Node Name:       %s\n", node_config::name());
   Serial.printf("Protocol Ver:    %u\n", PROTOCOL_VERSION);
   Serial.printf("Sample Interval: %lu s\n", (unsigned long)SAMPLE_INTERVAL_SEC);
   Serial.printf("Advertise:       %lu ms\n", (unsigned long)ADVERTISE_DURATION_MS);
@@ -55,7 +58,7 @@ void send_once() {
 
   SensorPacket packet{};
   packet.protocol_ver = PROTOCOL_VERSION;
-  packet.device_id = DEVICE_ID;
+  packet.device_id = node_config::device_id();
   packet.counter = ++packet_counter;
   packet.temperature = static_cast<int16_t>(temperature * 100.0f);
   packet.humidity = static_cast<uint8_t>(constrain(lroundf(humidity), 0L, 100L));
@@ -87,6 +90,19 @@ void send_once() {
 void setup() {
   Serial.begin(115200);
   Serial0.begin(115200);  // UART0：GPIO21(TX)/GPIO20(RX)，外接 USB-TTL 看串口用（3.3V）
+
+  // 配置模式检测：上电即采样 CONFIG_IO_PIN。
+  //   高电平 → 非低功耗配置模式（串口设置节点 ID/名称，不深睡）
+  //   低电平 → 正常低功耗流程
+  // 必须在冷启动 5s 延时之前判断，让配置模式尽快出提示符。
+  pinMode(CONFIG_IO_PIN, INPUT_PULLDOWN);
+  delay(10);  // 等内部下拉与开关电容稳定
+  const bool config_requested = (digitalRead(CONFIG_IO_PIN) == HIGH);
+  node_config::init();
+
+  if (config_requested) {
+    enter_config_mode();  // 不返回：内部循环等串口命令，直到 reboot
+  }
 
   const esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
   const bool cold_boot = (wake_cause != ESP_SLEEP_WAKEUP_TIMER);

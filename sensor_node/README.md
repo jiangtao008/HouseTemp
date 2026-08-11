@@ -9,6 +9,7 @@
 | MCU | ESP32-C3 (Mini 开发板) |
 | 传感器 | SHT40 (I2C, 地址 0x44) |
 | I2C | SDA=GPIO4, SCL=GPIO5 |
+| 配置模式开关 | GPIO3（内部下拉，悬空=正常模式；短接 3.3V=配置模式） |
 | 供电 | USB 或电池 (ADC 引脚 BATTERY_ADC_PIN) |
 
 ## 烧录指南
@@ -81,6 +82,44 @@ ID=<device_id> C=<counter> T=<temp_°C> H=<humi_%> B=<battery_mV> TAG=<auth_tag_
 |------|------|
 | I2C SDA | GPIO4 |
 | I2C SCL | GPIO5 |
+| 配置模式检测 IO | GPIO3（内部下拉，`CONFIG_IO_PIN`） |
 | 电池 ADC | 未启用 (BATTERY_ADC_PIN = -1) |
 
 所有配置项见 [`src/config.h`](src/config.h)。
+
+## 配置模式（非低功耗）
+
+节点增加了一个硬件 IO 开关，用于在不重新烧录的情况下修改节点 ID 和节点名。
+
+| 上电时 CONFIG_IO_PIN 电平 | 行为 |
+|------|------|
+| **低电平**（默认，开关断开） | 正常低功耗模式：60s 深睡 + BLE 广播 |
+| **高电平**（GPIO3 短接 3.3V） | **配置模式**：不深睡，串口可设置节点 ID / 节点名 |
+
+### 进入配置模式
+
+1. 将 `CONFIG_IO_PIN`（默认 GPIO3）短接到 **3.3V**
+2. 给节点上电 / 按 RESET
+3. 串口出现配置模式提示符（USB-CDC `Serial` 与 UART0 `Serial0` 均可，115200 baud）
+
+### 串口命令
+
+| 命令 | 说明 |
+|------|------|
+| `help` / `h` | 显示命令列表 |
+| `id <1..65535>` | 设置并持久化节点 ID |
+| `name <文本>` | 设置并持久化节点名（最长 32 字符） |
+| `show` | 显示当前配置 |
+| `reset` | 清空已保存配置，恢复默认 |
+| `reboot` / `exit` | 退出配置模式并重启（进入正常低功耗流程） |
+
+配置写入后**立即持久化到 NVS**，重启后生效。
+
+### 退出配置模式
+
+- 串口发送 `reboot`（或 `exit`）；或
+- 断开 GPIO3 的短接，然后按 RESET
+
+> 注意：修改节点 ID 后，需同步更新网关的节点名表
+> [`ble_gateway/src/config.h`](../ble_gateway/src/config.h)（`NODE_NAMES`）
+> 以及服务端数据库中该节点的名称，网关面板才会显示正确的名称。

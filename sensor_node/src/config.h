@@ -2,12 +2,18 @@
 
 #include <Arduino.h>
 
-constexpr uint16_t DEVICE_ID = 10008;
+// 编译期默认节点 ID。运行时可通过配置模式（CONFIG_IO_PIN 高电平 + 串口）覆盖，并持久化到 NVS。
+constexpr uint16_t DEFAULT_DEVICE_ID = 10008;
 constexpr uint8_t PROTOCOL_VERSION = 1;
 constexpr uint8_t I2C_SDA_PIN = 4;
 constexpr uint8_t I2C_SCL_PIN = 5;
 constexpr uint32_t SAMPLE_INTERVAL_SEC = 60;
 constexpr uint32_t ADVERTISE_DURATION_MS = 3000;
+
+// 配置模式检测 IO：内部下拉，悬空=低电平=正常低功耗模式；短接 3.3V=高电平=进入非低功耗串口配置模式。
+// 低电平（默认）同时把该引脚在深睡期间钳位为低，避免悬空。
+constexpr uint8_t CONFIG_IO_PIN = 3;
+constexpr uint8_t NODE_NAME_MAX_LEN = 32;
 
 // Set to a valid ADC pin if you want real battery measurement.
 constexpr int BATTERY_ADC_PIN = -1;
