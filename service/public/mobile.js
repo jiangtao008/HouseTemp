@@ -33,6 +33,12 @@ createApp({
   data() {
     return {
       token: '',                    // Bearer token（复用主界面登录态）
+      needsLogin: false,            // 未登录 / 会话失效 → 显示登录弹窗
+      authBusy: false,              // 登录/注册请求进行中
+      authError: '',                // 登录/注册错误提示
+      loginTab: 'login',            // 登录弹窗当前 Tab：'login' | 'register'
+      loginForm: { username: '', password: '' },
+      registerForm: { username: '', password: '', confirm: '' },
       panels: [],                   // 面板容器（一次一个，横向分页）
       widgets: [],                  // 节点小面板
       currentIndex: 0,              // 当前显示的面板索引
@@ -153,10 +159,77 @@ createApp({
       if (!res.ok) {
         let detail = res.status;
         try { detail = (await res.json()).detail || res.status; } catch (e) { /* ignore */ }
-        if (res.status === 401) { location.replace('/'); throw new Error('未登录'); }
+        if (res.status === 401) { this.showLogin(); throw new Error('未登录'); }
         throw new Error(detail);
       }
       return res.json();
+    },
+
+    // ---------- 认证（移动端登录弹窗，复用主界面接口与 localStorage.monitor.auth 存储键） ----------
+    startPolling() {
+      this.refreshPanels();
+      if (this.pollTimer) clearInterval(this.pollTimer);
+      this.pollTimer = setInterval(() => this.refreshPanels(), POLL_INTERVAL);
+    },
+    showLogin() {
+      if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
+      this.token = '';
+      try { localStorage.removeItem('monitor.auth'); } catch (e) { /* ignore */ }
+      this.needsLogin = true;
+      this.authError = '';
+      this.loginTab = 'login';
+    },
+    async login() {
+      const username = this.loginForm.username.trim();
+      const password = this.loginForm.password;
+      if (!username || !password) { this.authError = '请输入用户名和密码'; return; }
+      this.authBusy = true; this.authError = '';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { this.authError = data.detail || '登录失败'; return; }
+        this.setAuthed(data);
+      } catch (e) {
+        this.authError = '网络错误：' + e.message;
+      } finally {
+        this.authBusy = false;
+      }
+    },
+    async register() {
+      const username = this.registerForm.username.trim();
+      const password = this.registerForm.password;
+      const confirm = this.registerForm.confirm;
+      if (!username || !password) { this.authError = '请输入用户名和密码'; return; }
+      if (password !== confirm) { this.authError = '两次输入的密码不一致'; return; }
+      this.authBusy = true; this.authError = '';
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { this.authError = data.detail || '注册失败'; return; }
+        this.setAuthed(data);
+      } catch (e) {
+        this.authError = '网络错误：' + e.message;
+      } finally {
+        this.authBusy = false;
+      }
+    },
+    /** 登录/注册成功：写与主界面同键的 localStorage（跨页共享登录态）→ 关弹窗 → 拉数据并轮询。 */
+    setAuthed(data) {
+      this.token = data.token;
+      try {
+        localStorage.setItem('monitor.auth', JSON.stringify({ token: data.token, username: data.username, role: data.role, userId: data.userId }));
+      } catch (e) { /* ignore */ }
+      this.needsLogin = false;
+      this.authError = '';
+      this.loginForm.password = '';
+      this.registerForm = { username: '', password: '', confirm: '' };
+      this.startPolling();
     },
 
     // ---------- 数据 ----------
@@ -230,6 +303,10 @@ createApp({
     },
     next() {
       this.switchTo(this.currentIndex + 1);
+    },
+    /** 第一个面板无「上一个」时，左上角改为 PC 主页按钮 → 返回桌面主页面。 */
+    goHome() {
+      location.href = '/';
     },
     switchTo(i) {
       const el = this.$refs.pager;
@@ -649,21 +726,19 @@ createApp({
   },
 
   mounted() {
-    // 复用主界面登录态；无 token 或校验失败 → 回主页面
+    // 复用主界面登录态；无 token 或校验失败 → 就地显示登录弹窗（登录成功留在本页并刷新数据）
+    this._bindWinHandlers();
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('monitor.auth')); } catch (e) { saved = null; }
-    if (!saved || !saved.token) { location.replace('/'); return; }
+    if (!saved || !saved.token) { this.needsLogin = true; return; }
     this.token = saved.token;
-    this._bindWinHandlers();
     (async () => {
       try {
         const res = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + this.token } });
         if (!res.ok) throw new Error('auth failed');
-        this.refreshPanels();
-        this.pollTimer = setInterval(() => this.refreshPanels(), POLL_INTERVAL);
+        this.startPolling();
       } catch (e) {
-        try { localStorage.removeItem('monitor.auth'); } catch (e2) { /* ignore */ }
-        location.replace('/');
+        this.showLogin();
       }
     })();
     // 详情页历史记录：系统返回键 / 边缘滑动返回触发 popstate → 关闭详情
