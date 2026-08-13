@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>全屋温湿度监控 · 手机视图</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌡️</text></svg>">
+  <link rel="stylesheet" href="mobile.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部栏（固定）：查看模式 = 当前面板名 + 左右切换；编辑模式 = 完成 + 列数选择 -->
+    <header class="topbar">
+      <template v-if="editPanelId === null">
+        <button class="nav-btn" :class="{ hidden: !prevPanel }" @click="prev" aria-label="上一个面板">‹</button>
+        <div class="topbar-title">
+          <span class="panel-name">{{ currentPanel ? currentPanel.name : '--' }}</span>
+          <span class="panel-count" v-if="panels.length > 1">{{ currentIndex + 1 }} / {{ panels.length }}</span>
+        </div>
+        <button class="nav-btn next-btn" :class="{ hidden: !nextPanel }" @click="next" :aria-label="nextPanel ? '下一个面板：' + nextPanel.name : ''">
+          <span v-if="nextPanel" class="next-name">{{ nextPanel.name }}</span>
+          <span class="chev">›</span>
+        </button>
+      </template>
+      <template v-else>
+        <button class="nav-btn edit-done" @click="exitEditMode" aria-label="完成布局编辑">完成</button>
+        <div class="topbar-title">
+          <span class="panel-name">{{ currentPanel ? currentPanel.name : '--' }}</span>
+          <span class="edit-hint">编辑布局</span>
+        </div>
+        <div class="cols-picker" title="宫格列数">
+          <button v-for="c in COL_OPTIONS" :key="c" class="col-btn"
+                  :class="{ on: editCols === c }" @click="setCols(c)">{{ c }}</button>
+        </div>
+      </template>
+    </header>
+
+    <!-- 内容区：横向分页（查看模式左右滑动切换面板）；页内宫格超高时纵向滚动 -->
+    <main v-if="panels.length" class="pager" :class="{ editing: editPanelId !== null }"
+          ref="pager" @scroll="onPagerScroll" @pointerdown="onPagerPointerDown">
+      <section v-for="panel in panels" :key="panel.id" class="page" :data-panel="panel.id">
+        <div class="widget-grid" :class="{ editing: editPanelId === panel.id }"
+             :style="gridStyle(panel.id)" @pointerdown="onGridPointerDown">
+          <template v-if="gridWidgets(panel.id).length">
+            <div v-for="w in gridWidgets(panel.id)" :key="w.id" class="widget-card"
+                 :class="{ stale: w.stale, 'drag-src': dragId === w.id }"
+                 :data-wid="w.id" @click="openDetail(w)">
+              <div class="wc-head">
+                <span class="wc-name">{{ widgetName(w) }}</span>
+                <span v-if="w.stale" class="stale-badge">离线</span>
+              </div>
+              <div class="wc-temp">{{ fmtTemp(w.temperature) }}</div>
+              <div class="wc-rows">
+                <div class="wc-row">💧 湿度 <b>{{ w.humidity != null ? w.humidity + ' %' : '--' }}</b></div>
+                <div class="wc-row">🔋 电池 <b>{{ batteryText(w) }}</b></div>
+              </div>
+            </div>
+          </template>
+          <div v-else class="empty">该面板暂无节点</div>
+        </div>
+      </section>
+    </main>
+    <div v-else class="empty full">暂无面板</div>
+
+    <!-- 拖拽浮动卡片（编辑模式）：跟随手指，网格内原卡片隐藏占位 -->
+    <div v-if="dragId" class="widget-card drag-ghost" :class="ghostClass" :style="ghostStyle">
+      <div class="wc-head">
+        <span class="wc-name">{{ ghostName }}</span>
+        <span v-if="ghostStale" class="stale-badge">离线</span>
+      </div>
+      <div class="wc-temp">{{ ghostTemp }}</div>
+      <div class="wc-rows">
+        <div class="wc-row">💧 湿度 <b>{{ ghostHum }}</b></div>
+        <div class="wc-row">🔋 电池 <b>{{ ghostBat }}</b></div>
+      </div>
+    </div>
+
+    <!-- 详情页：全屏覆盖（左上返回 + 右上时间范围），数值概览 + 三条曲线 -->
+    <div v-if="detailWidget" class="detail">
+      <div class="detail-topbar">
+        <button class="nav-btn" @click="closeDetail" aria-label="返回">‹</button>
+        <div class="detail-title">{{ widgetName(detailWidget) }}</div>
+        <select class="detail-range" v-model="detailRange" @change="onDetailRangeChange" title="曲线时间范围">
+          <option v-for="r in chartRanges" :key="r.key" :value="r.key">{{ r.label }}</option>
+        </select>
+      </div>
+      <div class="detail-body">
+        <div class="detail-stats">
+          <div class="ds-item"><span class="ds-label">温度</span><span class="ds-value temp">{{ fmtTemp(detailWidget.temperature) }}</span></div>
+          <div class="ds-item"><span class="ds-label">湿度</span><span class="ds-value hum">{{ detailWidget.humidity != null ? detailWidget.humidity + ' %' : '--' }}</span></div>
+          <div class="ds-item"><span class="ds-label">电量</span><span class="ds-value bat">{{ batteryText(detailWidget) }}</span></div>
+        </div>
+        <div v-for="key in detailChartKeys" :key="key" class="detail-chart">
+          <div class="mini-chart-title" :class="miniChartClass(key)">{{ miniChartLabel(key) }}</div>
+          <template v-if="hasSpark(key)">
+            <div class="spark-plot">
+              <svg class="spark" viewBox="0 0 100 60" preserveAspectRatio="none">
+                <line v-for="xt in xTicks" :key="'xv' + xt.x" class="spark-grid spark-grid-v"
+                      :x1="xt.x" y1="0" :x2="xt.x" y2="60" vector-effect="non-scaling-stroke"/>
+                <line v-for="yt in yTicks(key)" :key="'yh' + yt.v" class="spark-grid spark-grid-h"
+                      x1="0" :y1="yt.y" x2="100" :y2="yt.y" vector-effect="non-scaling-stroke"/>
+                <polyline :points="sparkPoints(key)"
+                          :class="['spark-line', miniChartClass(key)]" vector-effect="non-scaling-stroke"/>
+              </svg>
+              <span v-for="yt in yTicks(key)" :key="'yl' + yt.v" class="spark-ytick" :style="yt.style">{{ yt.label }}</span>
+            </div>
+            <div class="spark-xaxis">
+              <span v-for="xt in xTicks" :key="'xl' + xt.x" class="spark-xtick" :style="xt.style">{{ xt.label }}</span>
+            </div>
+          </template>
+          <div v-else class="spark-empty">暂无数据</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+  <script src="mobile.js"></script>
+</body>
+</html>

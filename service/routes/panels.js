@@ -39,6 +39,7 @@ function widgetToJson(w) {
     show_bat: w.show_bat !== 0,
     chart_range: w.chart_range || '1d',
     chart_layout: w.chart_layout || 'v',
+    grid_order: w.grid_order || 0,   // 移动端宫格顺序（与桌面 2560×1440 布局独立）
   };
 }
 
@@ -105,6 +106,31 @@ router.delete('/:id', (req, res) => {
   if (panel.locked) return res.status(403).json({ detail: '面板已锁定，请先解锁' });
   db.deletePanel(req.user.id, id);
   res.json({ ok: true });
+});
+
+/** 保存面板内小面板的移动端宫格顺序：{ order: [小面板id,...] }，须为该面板全部小面板的排列。
+ * 插入位移重排后一次性提交（事务内重编号），与桌面布局互不影响。 */
+router.put('/:panelId/grid-order', (req, res) => {
+  const panelId = Number(req.params.panelId);
+  const panel = db.getPanel(req.user.id, panelId);
+  if (!panel) return res.status(404).json({ detail: '面板不存在' });
+  const order = (req.body && Array.isArray(req.body.order)) ? req.body.order : null;
+  if (!order) return res.status(400).json({ detail: '缺少 order（小面板 id 数组）' });
+  const ids = order.map((v) => Number(v));
+  if (ids.some((v) => !Number.isInteger(v))) return res.status(400).json({ detail: 'order 必须是小面板 id 数组' });
+  const r = db.setWidgetGridOrder(req.user.id, panelId, ids);
+  if (!r) return res.status(400).json({ detail: 'order 未覆盖面板全部小面板' });
+  res.json({ ok: true });
+});
+
+/** 设置面板的移动端宫格列数：{ cols }（1..6，按面板独立配置）。 */
+router.put('/:panelId/grid-cols', (req, res) => {
+  const panelId = Number(req.params.panelId);
+  const panel = db.getPanel(req.user.id, panelId);
+  if (!panel) return res.status(404).json({ detail: '面板不存在' });
+  const cols = Number((req.body || {}).cols);
+  if (!Number.isFinite(cols)) return res.status(400).json({ detail: '缺少 cols' });
+  res.json(db.setPanelGridCols(req.user.id, panelId, cols));
 });
 
 /** 保存节点小面板像素坐标。 */

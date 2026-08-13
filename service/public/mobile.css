@@ -1,0 +1,318 @@
+/* 全屋温湿度监控 —— 手机视图样式（只读展示，免编辑） */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #app { height: 100%; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+               "Microsoft YaHei", sans-serif;
+  background: #0d0e13;
+  color: #e8eaf0;
+  overflow: hidden;                 /* 滚动由内部容器接管，避免页面级滚动条 */
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app { display: flex; flex-direction: column; height: 100%; }
+
+/* ---------- 顶部栏（固定不随内容滚动） ---------- */
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 10px 10px;
+  background: #1d1f27;
+  border-bottom: 1px solid #2b2e3a;
+  z-index: 5;
+}
+.topbar-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.panel-name {
+  font-size: 17px;
+  font-weight: 600;
+  color: #e8eaf0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.panel-count { font-size: 12px; color: #6b7182; font-variant-numeric: tabular-nums; }
+.nav-btn {
+  flex: none;
+  min-width: 44px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background: #2c2f3c;
+  color: #cfd3de;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+.nav-btn:active { background: #3a3f4f; }
+/* 隐藏时用 visibility 占位，保证面板名始终居中、左右切换时不抖动 */
+.nav-btn.hidden { visibility: hidden; pointer-events: none; }
+.next-btn { gap: 6px; padding: 0 14px; }
+.next-name { font-size: 14px; color: #9aa0b0; white-space: nowrap; }
+.chev { font-size: 20px; }
+
+/* ---------- 内容分页器：左右滑动切换面板 ---------- */
+.pager {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;                     /* Firefox */
+  -webkit-overflow-scrolling: touch;
+}
+.pager::-webkit-scrollbar { display: none; } /* Chrome / Safari */
+.page {
+  flex: 0 0 100%;
+  overflow-y: auto;                          /* 页内纵向滚动 */
+  touch-action: pan-y;                       /* 纵向滚归页内，横向滑交还给分页器 */
+  overscroll-behavior: contain;
+  scroll-snap-align: start;
+  padding: 12px 14px calc(24px + env(safe-area-inset-bottom));
+}
+
+/* ---------- 节点卡片（宫格多列 + 编辑拖拽） ---------- */
+.widget-grid {
+  display: grid;
+  gap: 10px;
+  align-items: stretch;
+}
+.widget-grid .empty { grid-column: 1 / -1; }
+.widget-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 140px;
+  padding: 12px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #1a1d29 0%, #151722 100%);
+  border: 1px solid #2b2e3a;
+  border-radius: 14px;
+  cursor: pointer;
+}
+.widget-card:active { background: #1e2230; }
+.widget-card.stale { border-color: #5c4a1c; }
+.wc-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.wc-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #e8eaf0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stale-badge {
+  flex: none;
+  font-size: 10px;
+  color: #ffc94d;
+  background: rgba(255, 201, 77, .12);
+  border: 1px solid rgba(255, 201, 77, .35);
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+.wc-temp {
+  font-size: 34px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.wc-rows { display: flex; flex-direction: column; gap: 2px; }
+.wc-row { font-size: 12px; color: #aab0c0; }
+.wc-row b { color: #e8eaf0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ---------- 编辑布局模式（长按卡片进入） ---------- */
+.pager.editing { overflow-x: hidden; }              /* 编辑时禁止左右滑动切面板 */
+.widget-grid.editing { user-select: none; -webkit-user-select: none; }
+.widget-grid.editing .widget-card:not(.drag-ghost) {
+  touch-action: none;                                /* 卡片可全向拖拽，不被滚动接管 */
+  cursor: grab;
+}
+.widget-grid.editing .widget-card:not(.drag-ghost):not(.drag-src) {
+  animation: wiggle .9s ease-in-out infinite;        /* 抖动提示可拖动 */
+}
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-.5deg); }
+  75% { transform: rotate(.5deg); }
+}
+.widget-card.drag-src { visibility: hidden; }        /* 拖拽中的卡片在网格内隐藏占位 */
+.drag-ghost {
+  position: fixed;
+  z-index: 40;
+  margin: 0;
+  transform: scale(1.04);
+  border-color: #3f465a;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .5);
+  pointer-events: none;
+  cursor: grabbing;
+  animation: none;
+}
+
+/* ---------- 编辑模式顶部栏（完成 / 列数选择） ---------- */
+.edit-done { font-size: 15px; font-weight: 600; }
+.edit-hint { font-size: 12px; color: #6b7182; }
+.cols-picker {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #2c2f3c;
+  border: 1px solid #3a3f4f;
+  border-radius: 10px;
+  padding: 3px;
+}
+.col-btn {
+  min-width: 28px;
+  height: 30px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: #9aa0b0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.col-btn.on { background: #3a3f4f; color: #fff; font-weight: 600; }
+
+.empty { padding: 30px 0; text-align: center; color: #767d90; font-size: 14px; }
+.empty.full { margin-top: 35vh; }
+
+/* ---------- 详情页（全屏覆盖） ---------- */
+.detail {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: #0d0e13;
+  display: flex;
+  flex-direction: column;
+}
+.detail-topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top)) 10px 10px;
+  background: #1d1f27;
+  border-bottom: 1px solid #2b2e3a;
+}
+.detail-title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e8eaf0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail-range {
+  flex: none;
+  min-width: 96px;
+  font-size: 13px;
+  color: #cfd3de;
+  background: #2c2f3c;
+  border: 1px solid #3a3f4f;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 14px calc(28px + env(safe-area-inset-bottom));
+}
+.detail-stats { display: flex; gap: 10px; margin-bottom: 16px; }
+.ds-item {
+  flex: 1;
+  background: #171a25;
+  border: 1px solid #2b2e3a;
+  border-radius: 12px;
+  padding: 12px 8px;
+  text-align: center;
+}
+.ds-label { display: block; font-size: 12px; color: #8a90a2; margin-bottom: 6px; }
+.ds-value { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ds-value.temp { color: #6ea8fe; }
+.ds-value.hum { color: #4ed8a8; }
+.ds-value.bat { color: #ffd76a; }
+
+/* ---------- 详情曲线（复用主页面迷你曲线观感） ---------- */
+.detail-chart {
+  background: #171a25;
+  border: 1px solid #2b2e3a;
+  border-radius: 12px;
+  padding: 12px 12px 10px;
+  margin-bottom: 12px;
+}
+.mini-chart-title { font-size: 12px; color: #8a90a2; margin-bottom: 8px; }
+.mini-chart-title.temp { color: #6ea8fe; }
+.mini-chart-title.hum { color: #4ed8a8; }
+.mini-chart-title.bat { color: #ffd76a; }
+.spark-plot { position: relative; }
+.spark { display: block; width: 100%; height: 96px; }
+.spark-grid { stroke-width: 1; }
+.spark-grid-h { stroke: rgba(255, 255, 255, .08); }
+.spark-grid-v { stroke: rgba(255, 255, 255, .05); }
+.spark-line {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.spark-line.temp { stroke: #6ea8fe; }
+.spark-line.hum { stroke: #4ed8a8; }
+.spark-line.bat { stroke: #ffd76a; }
+.spark-ytick {
+  position: absolute;
+  left: 2px;
+  padding: 1px 3px;
+  font-size: 9px;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #9aa0b0;
+  background: rgba(15, 17, 24, .62);
+  border-radius: 3px;
+  pointer-events: none;
+}
+.spark-xaxis {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  margin-top: 2px;
+}
+.spark-xtick {
+  position: absolute;
+  bottom: 1px;
+  padding: 0 2px;
+  font-size: 8px;
+  line-height: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: #8a90a2;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.spark-empty {
+  padding: 30px 0;
+  text-align: center;
+  font-size: 12px;
+  color: #5f6472;
+}

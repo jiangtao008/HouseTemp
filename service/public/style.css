@@ -38,6 +38,9 @@ body {
   background: #3b5bdb;
   color: #fff;
 }
+/* 顶栏「手机视图」入口链接：复用 .tab 外观，去除下划线 */
+.mobile-link { text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+.mobile-link:hover { color: #fff; }
 
 .btn {
   padding: 7px 14px;

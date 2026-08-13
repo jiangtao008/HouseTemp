@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS panels (
     user_id    INTEGER NOT NULL,
     name       TEXT    NOT NULL DEFAULT '未命名面板',
     locked     INTEGER NOT NULL DEFAULT 0,      -- 1=锁定：禁止改名/删除/增删小面板
+    grid_cols  INTEGER NOT NULL DEFAULT 2,      -- 移动端宫格列数（手机视图每面板可配）
     created_at TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -128,6 +129,7 @@ CREATE TABLE IF NOT EXISTS topic_panels (
     show_bat      INTEGER NOT NULL DEFAULT 1,  -- 显示电量曲线
     chart_range   TEXT    NOT NULL DEFAULT '1d', -- 曲线时间范围：1h/6h/1d/3d/7d/15d/1M/3M/6M/1Y
     chart_layout  TEXT    NOT NULL DEFAULT 'v', -- 曲线布局：v=垂直, h=水平
+    grid_order    INTEGER NOT NULL DEFAULT 0,  -- 移动端宫格顺序（手机视图内排序，与桌面 2560×1440 布局独立）
     UNIQUE (panel_id, connection_id, topic)
 );
 `;
@@ -393,6 +395,28 @@ function migrateWidgetChartLayout() {
   }
 }
 
+/** 移动端宫格布局迁移：topic_panels 增加 grid_order（宫格顺序），panels 增加 grid_cols（每面板列数）。
+ * 两套布局独立：桌面用 2560×1440 像素自由布局，移动端用宫格排序，互不影响。按列存在性幂等。 */
+function migrateMobileGrid() {
+  const cols = db.prepare('PRAGMA table_info(topic_panels)').all();
+  if (!cols.some((c) => c.name === 'grid_order')) {
+    db.exec('ALTER TABLE topic_panels ADD COLUMN grid_order INTEGER NOT NULL DEFAULT 0');
+    // 回填：每面板内按 id 升序编号（0..n-1），保证迁移后顺序稳定
+    db.exec(`UPDATE topic_panels SET grid_order = (
+      SELECT COUNT(*) FROM topic_panels t2
+      WHERE t2.user_id = topic_panels.user_id
+        AND t2.panel_id = topic_panels.panel_id
+        AND t2.id < topic_panels.id
+    )`);
+    console.log('topic_panels 已增加 grid_order 列（移动端宫格顺序）');
+  }
+  const pcols = db.prepare('PRAGMA table_info(panels)').all();
+  if (!pcols.some((c) => c.name === 'grid_cols')) {
+    db.exec('ALTER TABLE panels ADD COLUMN grid_cols INTEGER NOT NULL DEFAULT 2');
+    console.log('panels 已增加 grid_cols 列（移动端每面板列数，默认 2）');
+  }
+}
+
 function init(cfg) {
   fs.mkdirSync(path.dirname(cfg.database.path), { recursive: true });
   db = new Database(cfg.database.path);
@@ -410,6 +434,7 @@ function init(cfg) {
   migrateWidgetChartFlags();
   migrateWidgetChartRange();
   migrateWidgetChartLayout();
+  migrateMobileGrid();
 }
 
 // ---------------------------------------------------------------------------
@@ -765,7 +790,7 @@ const PANEL_STALE_AFTER_MS = 10 * 60 * 1000; // 超过 10 分钟未上报视为�
 
 /** 全部面板容器（某用户）。 */
 function listPanels(userId) {
-  return db.prepare('SELECT id, name, locked FROM panels WHERE user_id = ? ORDER BY id').all(userId);
+  return db.prepare('SELECT id, name, locked, grid_cols FROM panels WHERE user_id = ? ORDER BY id').all(userId);
 }
 
 function getPanel(userId, id) {
@@ -796,13 +821,14 @@ function deletePanel(userId, id) {
   return db.prepare('DELETE FROM panels WHERE user_id = ? AND id = ?').run(userId, id);
 }
 
-/** 全部节点小面板（主页面数据源，某用户）：只列出已启用连接绑定的。 */
+/** 全部节点小面板（主页面数据源，某用户）：只列出已启用连接绑定的。
+ * 面板内按移动端宫格顺序 grid_order 排列（与桌面 2560×1440 布局无关）。 */
 function listWidgets(userId) {
   const rows = db.prepare(
     `SELECT p.* FROM topic_panels p
      LEFT JOIN mqtt_connections c ON c.id = p.connection_id
      WHERE p.user_id = ? AND (p.connection_id IS NULL OR c.enabled = 1)
-     ORDER BY p.panel_id, p.id`
+     ORDER BY p.panel_id, p.grid_order, p.id`
   ).all(userId);
   return rows.map((r) => {
     let stale = false;
@@ -821,6 +847,31 @@ function getWidget(userId, id) {
 function updateWidgetLayout(userId, id, x, y, w, h) {
   db.prepare('UPDATE topic_panels SET x = ?, y = ?, w = ?, h = ? WHERE user_id = ? AND id = ?').run(x, y, w, h, userId, id);
   return getWidget(userId, id);
+}
+
+/** 保存某面板内节点小面板的移动端宫格顺序：orderIds 须为该面板当前全部小面板 id 的排列。
+ * 事务内重编号（插入位移重排后一次性提交）。返回 null 表示校验失败（未覆盖全部小面板）。 */
+function setWidgetGridOrder(userId, panelId, orderIds) {
+  const list = db.prepare('SELECT id FROM topic_panels WHERE user_id = ? AND panel_id = ?').all(userId, panelId);
+  const have = new Set(list.map((r) => r.id));
+  if (have.size !== orderIds.length || orderIds.some((id) => !have.has(id))) return null;
+  const upd = db.prepare('UPDATE topic_panels SET grid_order = ? WHERE user_id = ? AND id = ?');
+  db.exec('BEGIN');
+  try {
+    orderIds.forEach((id, i) => upd.run(i, userId, id));
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return { ok: true };
+}
+
+/** 设置面板的移动端宫格列数（1..6）。 */
+function setPanelGridCols(userId, panelId, cols) {
+  cols = Math.max(1, Math.min(6, Math.trunc(Number(cols)) || 2));
+  db.prepare('UPDATE panels SET grid_cols = ? WHERE user_id = ? AND id = ?').run(cols, userId, panelId);
+  return getPanel(userId, panelId);
 }
 
 /** 部分更新小面板图表设置（show_temp/show_hum/show_bat/chart_range/chart_layout，undefined 不修改）。 */
@@ -919,15 +970,19 @@ function listWidgetTelemetry(widget, opts = {}) {
   return downsampleTelemetry(rows, limit);
 }
 
-/** 向某面板添加一个绑定订阅主题的节点小面板（同面板同主题去重）。 */
+/** 向某面板添加一个绑定订阅主题的节点小面板（同面板同主题去重）。
+ * 移动端宫格顺序 grid_order 追加到面板末尾（新小面板排最后）。 */
 function createWidget(userId, panelId, node) {
   const exist = db.prepare(
     'SELECT id FROM topic_panels WHERE user_id = ? AND panel_id = ? AND connection_id = ? AND topic = ?'
   ).get(userId, panelId, node.connection_id, node.topic);
   if (exist) return getWidget(userId, exist.id);
+  const max = db.prepare(
+    'SELECT COALESCE(MAX(grid_order), -1) AS m FROM topic_panels WHERE user_id = ? AND panel_id = ?'
+  ).get(userId, panelId).m;
   const info = db.prepare(
-    'INSERT INTO topic_panels (user_id, panel_id, connection_id, topic, name, type) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(userId, panelId, node.connection_id, node.topic, node.name || '', node.type || 'thermo');
+    'INSERT INTO topic_panels (user_id, panel_id, connection_id, topic, name, type, grid_order) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(userId, panelId, node.connection_id, node.topic, node.name || '', node.type || 'thermo', max + 1);
   return getWidget(userId, info.lastInsertRowid);
 }
 
@@ -1048,6 +1103,8 @@ module.exports = {
   getWidget,
   updateWidgetLayout,
   updateWidgetSettings,
+  setWidgetGridOrder,
+  setPanelGridCols,
   listWidgetTelemetry,
   createWidget,
   deleteWidget,

@@ -47,6 +47,8 @@
       <button class="tab" :class="{ active: tab === 'main' }" @click="switchTab('main')">主页面</button>
       <button class="tab" :class="{ active: tab === 'subs' }" @click="switchTab('subs')">订阅页面</button>
       <button v-if="role === 'admin'" class="tab" :class="{ active: tab === 'users' }" @click="switchTab('users')">用户管理</button>
+      <!-- 手机视图入口：独立只读展示页（手机 / 大屏查看用） -->
+      <a class="tab mobile-link" href="/mobile.html" title="手机视图（只读展示）">📱 手机视图</a>
       <!-- 右上角用户区：logo（用户名首字）+ 用户名，点击弹出菜单 -->
       <div class="user-area" @click="toggleUserMenu">
         <span class="user-avatar">{{ userAvatarText }}</span>
