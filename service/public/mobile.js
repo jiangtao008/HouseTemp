@@ -90,7 +90,7 @@ createApp({
       if (t1 === null) return null;
       return { t0: t1 - chartRangeMs(this.detailRange), t1, span: chartRangeMs(this.detailRange) };
     },
-    /** x 轴时间刻度：锚定窗口最新时间向左铺开（右端 = 现在）。 */
+    /** x 轴时间刻度：锚定窗口最新时间向左铺开（右端 = 最新数据时刻，标签为绝对时间）。 */
     xTicks() {
       const win = this.detailWin;
       if (!win) return [];
@@ -110,7 +110,7 @@ createApp({
         const transform = i === 0 ? 'translateX(0)'
           : i === n - 1 ? 'translateX(-100%)'
           : 'translateX(-50%)';
-        return { x, label: tk.k === 0 ? '现在' : this.fmtAgo(win.t1 - tk.t), style: { left: left + '%', transform } };
+        return { x, label: this.fmtTickTime(tk.t, win), style: { left: left + '%', transform } };
       });
     },
     // ---- 拖拽浮动卡片 ----
@@ -514,16 +514,16 @@ createApp({
       }
       return 365 * D;
     },
-    fmtAgo(ms) {
-      const min = ms / 60000;
-      if (min < 60) return Math.round(min) + 'm';
-      const h = min / 60;
-      if (h < 24) return (Number.isInteger(h) ? h : h.toFixed(1)) + 'h';
-      const d = h / 24;
-      if (d < 30) return (Number.isInteger(d) ? d : d.toFixed(1)) + 'd';
-      const mon = d / 30;
-      if (mon < 12) return Math.round(mon) + 'M';
-      return Math.round(mon / 12) + 'Y';
+    /** x 轴刻度 → 绝对时间：n时m分（整点省略「分」）；窗口跨度 >24h 时前缀「M/D」，跨天也不混淆。 */
+    fmtTickTime(t, win) {
+      const d = new Date(t);
+      if (isNaN(d.getTime())) return '--';
+      const m = d.getMinutes();
+      const hm = d.getHours() + '时' + (m ? (m < 10 ? '0' : '') + m + '分' : '');
+      if (win.span > 24 * 3600e3) {
+        return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+      }
+      return hm;
     },
     /** 曲线纵轴「好看」范围：圆整刻度完全包住数据，且 ≥3 个刻度。 */
     seriesYRange(key) {

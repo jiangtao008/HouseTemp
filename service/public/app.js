@@ -1101,19 +1101,18 @@ createApp({
       }
       return 365 * D;
     },
-    /** 相对时长 → 紧凑标签：15m / 6h / 3d / 1M / 1Y。 */
-    fmtAgo(ms) {
-      const min = ms / 60000;
-      if (min < 60) return Math.round(min) + 'm';
-      const h = min / 60;
-      if (h < 24) return (Number.isInteger(h) ? h : h.toFixed(1)) + 'h';
-      const d = h / 24;
-      if (d < 30) return (Number.isInteger(d) ? d : d.toFixed(1)) + 'd';
-      const mon = d / 30;
-      if (mon < 12) return Math.round(mon) + 'M';
-      return Math.round(mon / 12) + 'Y';
+    /** x 轴刻度 → 绝对时间：n时m分（整点省略「分」）；窗口跨度 >24h 时前缀「M/D」，跨天也不混淆。 */
+    fmtTickTime(t, win) {
+      const d = new Date(t);
+      if (isNaN(d.getTime())) return '--';
+      const m = d.getMinutes();
+      const hm = d.getHours() + '时' + (m ? (m < 10 ? '0' : '') + m + '分' : '');
+      if (win.span > 24 * 3600e3) {
+        return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
+      }
+      return hm;
     },
-    /** x 轴时间刻度：锚定窗口最新时间向左铺开；x 为 0..100 坐标系位置，标签为距最新点的相对时长（右端=现在）。 */
+    /** x 轴时间刻度：锚定窗口最新时间向左铺开；x 为 0..100 坐标系位置，标签为该时刻的绝对时间（n时m分，跨天加日期）。 */
     xTicksFor(w, key) {
       const win = this.chartWindow(w);
       if (!win) return [];
@@ -1136,7 +1135,7 @@ createApp({
           : 'translateX(-50%)';
         return {
           x,
-          label: tk.k === 0 ? '现在' : this.fmtAgo(win.t1 - tk.t),
+          label: this.fmtTickTime(tk.t, win),
           style: { left: left + '%', transform },
         };
       });
