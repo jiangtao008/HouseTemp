@@ -34,3 +34,4 @@ service/public/uploads/
 service/config.json
 service/node_modules/
 *.db
+service/server.log
