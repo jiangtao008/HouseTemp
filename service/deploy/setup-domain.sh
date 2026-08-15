@@ -150,7 +150,7 @@ if read -rp "是否将 8000 端口限制为仅本机可访问（关闭 http://IP
   case "$ans" in
     y|Y|yes|YES)
       if command -v ufw >/dev/null 2>&1; then
-        ufw allow 80/tcp 443/tcp
+        ufw allow 80,443/tcp
         ufw allow OpenSSH
         ufw --force enable
         ufw deny 8000/tcp
