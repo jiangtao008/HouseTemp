@@ -69,21 +69,25 @@ fi
 echo "   ✓ Node.js $(node --version)"
 
 # ---------- 拷贝代码 ----------
-echo "▸ 拷贝代码到 $APP_DIR ..."
-mkdir -p "$APP_DIR"
-if command -v rsync >/dev/null 2>&1; then
-  # --delete 保证目标干净；data/、node_modules、日志、macOS 垃圾文件不参与同步
-  #（--exclude 的目录在目标端不会被 --delete 误删，重跑安全）
-  rsync -a --delete \
-    --exclude 'node_modules/' \
-    --exclude 'data/' \
-    --exclude 'server.log' \
-    --exclude '.DS_Store' \
-    "$SOURCE_DIR/" "$APP_DIR/"
+if [ "$SOURCE_DIR" = "$APP_DIR" ]; then
+  echo "▸ 源码已在 $APP_DIR（如 clone 到此目录），跳过拷贝"
 else
-  echo "  ! 未安装 rsync，改用 cp（不会清理目标多余文件，建议 apt install rsync）"
-  cp -r "$SOURCE_DIR"/. "$APP_DIR/" 2>/dev/null || true
-  rm -rf "$APP_DIR/node_modules" "$APP_DIR/data" "$APP_DIR/server.log" "$APP_DIR/.DS_Store"
+  echo "▸ 拷贝代码到 $APP_DIR ..."
+  mkdir -p "$APP_DIR"
+  if command -v rsync >/dev/null 2>&1; then
+    # --delete 保证目标干净；data/、node_modules、日志、macOS 垃圾文件不参与同步
+    #（--exclude 的目录在目标端不会被 --delete 误删，重跑安全）
+    rsync -a --delete \
+      --exclude 'node_modules/' \
+      --exclude 'data/' \
+      --exclude 'server.log' \
+      --exclude '.DS_Store' \
+      "$SOURCE_DIR/" "$APP_DIR/"
+  else
+    echo "  ! 未安装 rsync，改用 cp（不会清理目标多余文件，建议 apt install rsync）"
+    cp -r "$SOURCE_DIR"/. "$APP_DIR/" 2>/dev/null || true
+    rm -rf "$APP_DIR/node_modules" "$APP_DIR/data" "$APP_DIR/server.log" "$APP_DIR/.DS_Store"
+  fi
 fi
 
 # ---------- 初始化 config.json ----------
