@@ -154,20 +154,32 @@ void handle_line(const char *line) {
 }
 }  // namespace
 
-void enter_config_mode() {
+void enter_config_mode(uint32_t idle_timeout_ms) {
   emit("\r\n");
   emit("======================================\r\n");
-  emit(" CONFIG MODE  (CONFIG_IO high)\r\n");
-  emit(" Type 'help' for commands, 'reboot' to exit.\r\n");
+  emit(" CONFIG MODE  (cold boot)\r\n");
+  emit(" Commands: help / id <n> / name <text> / show / reset / reboot\r\n");
+  emit(" No command within %lu ms -> exit to normal mode.\r\n",
+       static_cast<unsigned long>(idle_timeout_ms));
   emit("======================================\r\n");
   node_config::print();
   emit("> ");
 
+  uint32_t last_activity_ms = millis();
+  bool keep_alive = false;  // 收到任意命令后取消超时，永久保持配置模式
   char line[LINE_BUF_SIZE];
   while (true) {
-    if (read_line(line, sizeof(line))) {
-      handle_line(line);
+    // 串口还有未处理字符 = 用户在场，刷新空闲计时（防止"命令打到一半被超时踢出"）。
+    if (Serial.available() > 0 || Serial0.available() > 0) {
+      last_activity_ms = millis();
     }
-    // 配置模式是非低功耗模式：串口有数据立刻处理，无数据时忙等即可，无需省电。
+    if (read_line(line, sizeof(line))) {
+      keep_alive = true;  // 任意完整行都视为配置命令，保持配置模式直到下次冷启动
+      handle_line(line);
+    } else if (!keep_alive && (millis() - last_activity_ms >= idle_timeout_ms)) {
+      emit("\r\n[config] no command within %lu ms, entering normal mode\r\n",
+           static_cast<unsigned long>(idle_timeout_ms));
+      return;  // 返回后调用方继续正常低功耗流程
+    }
   }
 }

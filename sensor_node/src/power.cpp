@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <Wire.h>
 #include <esp_bt.h>
 #include <esp_sleep.h>
 
@@ -29,6 +30,11 @@ void enter_deep_sleep() {
   if (Serial) {
     Serial.flush();
   }
+
+  // 释放 I2C 总线：让 I2C 硬件以干净状态进入深睡。若不释放，深睡转换时总线/FSM 可能
+  // 停在"忙"状态，唤醒后仅靠 Wire.begin() 不会自动恢复——这正是"冷启动温湿度正常、
+  // 每次定时唤醒后变成哨兵值（-273℃/100%RH）"的典型原因。
+  Wire.end();
 
   esp_deep_sleep_start();
 

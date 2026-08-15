@@ -2,17 +2,17 @@
 
 #include <Arduino.h>
 
-// 编译期默认节点 ID。运行时可通过配置模式（CONFIG_IO_PIN 高电平 + 串口）覆盖，并持久化到 NVS。
-constexpr uint16_t DEFAULT_DEVICE_ID = 10008;
+// 编译期默认节点 ID。运行时可通过配置模式（冷启动 5s 窗口内串口命令）覆盖，并持久化到 NVS。
+constexpr uint16_t DEFAULT_DEVICE_ID = 10009;
 constexpr uint8_t PROTOCOL_VERSION = 1;
 constexpr uint8_t I2C_SDA_PIN = 4;
 constexpr uint8_t I2C_SCL_PIN = 5;
 constexpr uint32_t SAMPLE_INTERVAL_SEC = 60;
-constexpr uint32_t ADVERTISE_DURATION_MS = 3000;
+constexpr uint32_t ADVERTISE_DURATION_MS = 1500;
 
-// 配置模式检测 IO：内部下拉，悬空=低电平=正常低功耗模式；短接 3.3V=高电平=进入非低功耗串口配置模式。
-// 低电平（默认）同时把该引脚在深睡期间钳位为低，避免悬空。
-constexpr uint8_t CONFIG_IO_PIN = 3;
+// 冷启动进入配置模式的等待窗口：5s 内收到任意串口命令则一直保持配置模式（直到下次冷启动），
+// 超时无命令则退出配置模式，进入正常低功耗流程。
+constexpr uint32_t CONFIG_MODE_WINDOW_MS = 5000;
 constexpr uint8_t NODE_NAME_MAX_LEN = 32;
 
 // Set to a valid ADC pin if you want real battery measurement.

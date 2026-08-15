@@ -91,25 +91,21 @@ void setup() {
   Serial.begin(115200);
   Serial0.begin(115200);  // UART0：GPIO21(TX)/GPIO20(RX)，外接 USB-TTL 看串口用（3.3V）
 
-  // 配置模式检测：上电即采样 CONFIG_IO_PIN。
-  //   高电平 → 非低功耗配置模式（串口设置节点 ID/名称，不深睡）
-  //   低电平 → 正常低功耗流程
-  // 必须在冷启动 5s 延时之前判断，让配置模式尽快出提示符。
-  pinMode(CONFIG_IO_PIN, INPUT_PULLDOWN);
-  delay(10);  // 等内部下拉与开关电容稳定
-  const bool config_requested = (digitalRead(CONFIG_IO_PIN) == HIGH);
-  node_config::init();
+  // GPIO3 原为配置模式硬件开关，该功能已移除；置为低电平，避免深睡时悬空漏电。
+  pinMode(3, OUTPUT);
+  digitalWrite(3, LOW);
 
-  if (config_requested) {
-    enter_config_mode();  // 不返回：内部循环等串口命令，直到 reboot
-  }
+  node_config::init();
 
   const esp_sleep_wakeup_cause_t wake_cause = esp_sleep_get_wakeup_cause();
   const bool cold_boot = (wake_cause != ESP_SLEEP_WAKEUP_TIMER);
 
-  // 仅冷启动（非深睡定时唤醒）等待 5s，给串口监视器留出连接窗口，再打印节点信息。
+  // 冷启动默认进入配置模式（上报当前配置，等待串口命令）：
+  //   - CONFIG_MODE_WINDOW_MS 内收到任意命令 → 一直保持配置模式，直到下次冷启动
+  //   - 超时无命令 → 退出配置模式，继续正常低功耗流程
+  // 深睡定时唤醒不进配置窗口，避免每个周期被拖慢。
   if (cold_boot) {
-    delay(5000);
+    enter_config_mode(CONFIG_MODE_WINDOW_MS);
     print_node_info();
   } else {
     delay(200);
