@@ -6,9 +6,35 @@
  * 导出：router（/api/auth/*）、requireAuth（其余 /api/* 用）、requireAdmin、ensureAdmin。 */
 const crypto = require('crypto');
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const db = require('../db');
 
 const router = express.Router();
+
+// ---------------------------------------------------------------------------
+// 头像上传（multer 存到 public/uploads，URL 即 /uploads/文件名）
+// ---------------------------------------------------------------------------
+
+const UPLOAD_DIR = path.join(__dirname, '..', 'public', 'uploads');
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+    filename: (_req, file, cb) => {
+      // 时间戳 + 随机数命名，避免文件名冲突；扩展名取原图（小写化，未知时兜底 .png）
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      cb(null, `${Date.now()}_${Math.round(Math.random() * 1e9)}${/\.(png|jpe?g|gif|webp)$/.test(ext) ? ext : '.png'}`);
+    },
+  }),
+  limits: { fileSize: 2 * 1024 * 1024 },   // 上限 2MB
+  fileFilter: (_req, file, cb) => {
+    if (/^image\/(png|jpe?g|gif|webp)$/.test(file.mimetype)) cb(null, true);
+    else cb(new Error('仅支持 PNG / JPG / GIF / WebP 图片'));
+  },
+});
 
 // ---------------------------------------------------------------------------
 // 密码哈希 / token
@@ -95,7 +121,7 @@ router.post('/login', (req, res) => {
   }
   const token = newToken();
   db.createSession(token, user.id);
-  res.json({ token, username: user.username, role: user.role, userId: user.id });
+  res.json({ token, username: user.username, role: user.role, userId: user.id, avatar: user.avatar || '' });
 });
 
 router.post('/register', (req, res) => {
@@ -113,7 +139,7 @@ router.post('/register', (req, res) => {
 
   const token = newToken();
   db.createSession(token, user.id);
-  res.status(201).json({ token, username: user.username, role: user.role, userId: user.id });
+  res.status(201).json({ token, username: user.username, role: user.role, userId: user.id, avatar: user.avatar || '' });
 });
 
 router.post('/logout', (req, res) => {
@@ -127,7 +153,7 @@ router.get('/me', (req, res) => {
   if (!token) return res.status(401).json({ detail: '未登录' });
   const session = db.getSession(token);
   if (!session) return res.status(401).json({ detail: '登录已失效' });
-  res.json({ username: session.username, role: session.role, userId: session.user_id });
+  res.json({ username: session.username, role: session.role, userId: session.user_id, avatar: session.avatar || '' });
 });
 
 /** 修改自己的密码：先校验旧密码，再写入新密码（哈希后落库）。 */
@@ -148,6 +174,42 @@ router.put('/password', (req, res) => {
   }
   db.setUserPassword(user.id, hashPassword(newPassword));
   res.json({ ok: true });
+});
+
+/** 上传/更换头像：multipart 表单字段 `avatar`（图片，≤2MB）。成功后删除旧头像文件。
+ * 先校验登录态再交给 multer 解析，避免未登录请求也能往磁盘写文件；
+ * 用回调式 multer 中间件，把「文件过大」等错误转成中文提示返回给前端。 */
+router.post('/avatar', (req, res) => {
+  const token = parseBearer(req.headers.authorization);
+  if (!token) return res.status(401).json({ detail: '未登录' });
+  const session = db.getSession(token);
+  if (!session) return res.status(401).json({ detail: '登录已失效' });
+
+  avatarUpload.single('avatar')(req, res, (err) => {
+    if (err) {
+      const msg = err.code === 'LIMIT_FILE_SIZE' ? '图片不能超过 2MB' : err.message;
+      return res.status(400).json({ detail: msg });
+    }
+    if (!req.file) return res.status(400).json({ detail: '请选择图片文件' });
+
+    const url = '/uploads/' + req.file.filename;
+    try {
+      db.setUserAvatar(session.user_id, url);
+    } catch (e) {
+      // 落库失败时删除刚写入的文件，避免残留
+      try { fs.unlinkSync(req.file.path); } catch (e2) { /* 忽略 */ }
+      throw e;
+    }
+
+    // 清理旧头像文件（仅删库里记录的这张，且不误删新上传的文件）
+    if (session.avatar) {
+      try {
+        const oldPath = path.join(UPLOAD_DIR, path.basename(session.avatar));
+        if (oldPath !== req.file.path && fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      } catch (e) { /* 忽略：旧文件清理失败不影响本次修改 */ }
+    }
+    res.json({ avatar: url });
+  });
 });
 
 // ---------------------------------------------------------------------------

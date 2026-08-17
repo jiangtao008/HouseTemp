@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS users (
     username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,   -- 用户名不区分大小写唯一
     password_hash TEXT    NOT NULL,                          -- scrypt 哈希，存 salt:hash
     role          TEXT    NOT NULL DEFAULT 'user',           -- 'admin' | 'user'
+    avatar        TEXT,                                      -- 头像图片 URL（/uploads/xxx；空=显示用户名首字符）
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -417,6 +418,15 @@ function migrateMobileGrid() {
   }
 }
 
+/** users 表增加 avatar 列（头像 URL，空=用用户名首字符兜底）。按列存在性幂等。 */
+function migrateUserAvatar() {
+  const cols = db.prepare('PRAGMA table_info(users)').all();
+  if (!cols.some((c) => c.name === 'avatar')) {
+    db.exec('ALTER TABLE users ADD COLUMN avatar TEXT');
+    console.log('users 表已增加 avatar 列（头像）');
+  }
+}
+
 function init(cfg) {
   fs.mkdirSync(path.dirname(cfg.database.path), { recursive: true });
   db = new Database(cfg.database.path);
@@ -435,6 +445,7 @@ function init(cfg) {
   migrateWidgetChartRange();
   migrateWidgetChartLayout();
   migrateMobileGrid();
+  migrateUserAvatar();
 }
 
 // ---------------------------------------------------------------------------
@@ -456,11 +467,16 @@ function getUserById(id) {
 }
 
 function listUsers() {
-  return db.prepare('SELECT id, username, role, created_at FROM users ORDER BY id').all();
+  return db.prepare('SELECT id, username, role, avatar, created_at FROM users ORDER BY id').all();
 }
 
 function setUserPassword(id, hash) {
   db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, id);
+  return getUserById(id);
+}
+
+function setUserAvatar(id, avatar) {
+  db.prepare('UPDATE users SET avatar = ? WHERE id = ?').run(avatar, id);
   return getUserById(id);
 }
 
@@ -490,10 +506,10 @@ function createSession(token, userId) {
   db.prepare('INSERT INTO sessions (token, user_id, last_used_at) VALUES (?, ?, ?)').run(token, userId, nowIso());
 }
 
-/** 会话 → 归属用户（JOIN users 取 username/role）。无有效会话返回 undefined。 */
+/** 会话 → 归属用户（JOIN users 取 username/role/avatar）。无有效会话返回 undefined。 */
 function getSession(token) {
   return db.prepare(
-    `SELECT s.token, s.user_id, u.username, u.role FROM sessions s
+    `SELECT s.token, s.user_id, u.username, u.role, u.avatar FROM sessions s
      JOIN users u ON u.id = s.user_id WHERE s.token = ?`
   ).get(token);
 }
@@ -1058,6 +1074,7 @@ module.exports = {
   getUserById,
   listUsers,
   setUserPassword,
+  setUserAvatar,
   setUserRole,
   countAdmins,
   deleteUser,

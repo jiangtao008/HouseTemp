@@ -11,3 +11,526 @@ MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_1231
 MQTT 错误 [#1 默认连接]: Keepalive timeout
 MQTT 连接断开 [#1 默认连接]（自动重连中）
 MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ECONNRESET
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53021)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53030)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53049)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53064)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53070)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53081)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53091)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53109)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53136)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53148)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53152)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53173)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53187)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53195)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53218)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53238)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53248)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53249)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53260)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53274)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53280)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53285)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53297)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53312)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53322)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53345)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53357)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53362)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:53371)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connack timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ECONNRESET
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+正在停止服务…
+服务已启动: http://0.0.0.0:8000
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 订阅已更新 [#1 默认连接]: +温湿度 gateway_16103828/node_10009/temperature -—
+MQTT 订阅已更新 [#1 默认连接]: +— -gateway_12312/node_11923/temperature
+MQTT 订阅已更新 [#1 默认连接]: +— -gateway_12312/node_11918/temperature
+MQTT 订阅已更新 [#1 默认连接]: +— -gateway_12312/node_11924/temperature
+MQTT 订阅已更新 [#1 默认连接]: +— -温湿度 gateway_16103828/node_10009/temperature
+MQTT 订阅已更新 [#1 默认连接]: +gateway_16103828/node_10009/temperature -—
+MQTT 订阅已更新 [#1 默认连接]: +gateway_16103828/node_10010/temperature -—
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 订阅已更新 [#1 默认连接]: +gateway_16103828/node_10009/temperature, gateway_16103828/node_10010/temperature -gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ECONNRESET
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:50516)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:50534)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:50554)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:57082)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:57089)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:57097)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:57104)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 错误 [#1 默认连接]: connect ENETUNREACH 118.89.133.140:9883 - Local (0.0.0.0:57116)
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: Keepalive timeout
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 错误 [#1 默认连接]: read ETIMEDOUT
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+MQTT 连接断开 [#1 默认连接]（自动重连中）
+MQTT 已连接 [#1 默认连接]: mqtt://118.89.133.140:9883 订阅 gateway_12312/node_11924/temperature, gateway_12312/node_11918/temperature, gateway_12312/node_11923/temperature, gateway_16103828/node_10008/temperature
+正在停止服务…

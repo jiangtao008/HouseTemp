@@ -49,13 +49,17 @@
       <button v-if="role === 'admin'" class="tab" :class="{ active: tab === 'users' }" @click="switchTab('users')">用户管理</button>
       <!-- 手机视图入口：独立只读展示页（手机 / 大屏查看用） -->
       <a class="tab mobile-link" href="/mobile.html" title="手机视图（只读展示）">📱 手机视图</a>
-      <!-- 右上角用户区：logo（用户名首字）+ 用户名，点击弹出菜单 -->
+      <!-- 右上角用户区：头像（无头像时显示用户名首字）+ 用户名，点击弹出菜单 -->
       <div class="user-area" @click="toggleUserMenu">
-        <span class="user-avatar">{{ userAvatarText }}</span>
+        <span class="user-avatar">
+          <img v-if="avatar" class="user-avatar-img" :src="avatar" alt="头像">
+          <template v-else>{{ userAvatarText }}</template>
+        </span>
         <span class="user-name">{{ username }}</span>
         <span class="user-caret">▾</span>
         <div v-show="userMenuOpen" class="user-menu" @click.stop>
           <button v-if="role === 'admin'" class="user-menu-item" @click="goAdminUsers">用户管理</button>
+          <button class="user-menu-item" @click="openChangeAvatar">修改头像</button>
           <button class="user-menu-item" @click="openChangePwd">修改密码</button>
           <button class="user-menu-item danger" @click="logout">退出登录</button>
         </div>
@@ -434,6 +438,34 @@
           <button class="btn" @click="closeChangePwd">取消</button>
           <button class="btn primary" @click="saveChangePwd" :disabled="changePwdSaving">
             {{ changePwdSaving ? '提交中…' : '确认修改' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改头像弹窗：右上角用户下拉菜单进入；选择图片即时预览，确认后上传 -->
+    <div v-if="changeAvatarOpen" class="modal-mask">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <span class="modal-title">修改头像</span>
+          <button class="modal-close" title="关闭" @click="closeChangeAvatar">✕</button>
+        </div>
+        <div class="modal-body">
+          <div class="avatar-preview-wrap">
+            <div class="avatar-preview">
+              <img v-if="avatarPreview" :src="avatarPreview" alt="头像预览">
+              <span v-else>未选择图片</span>
+            </div>
+          </div>
+          <label class="login-label">选择头像图片</label>
+          <input class="login-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" @change="onAvatarFileChange">
+          <p class="login-hint">支持 PNG / JPG / GIF / WebP，大小不超过 2MB</p>
+          <p v-if="changeAvatarError" class="login-error">{{ changeAvatarError }}</p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" @click="closeChangeAvatar">取消</button>
+          <button class="btn primary" @click="saveChangeAvatar" :disabled="changeAvatarSaving">
+            {{ changeAvatarSaving ? '上传中…' : '确认修改' }}
           </button>
         </div>
       </div>

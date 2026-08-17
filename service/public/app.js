@@ -70,11 +70,17 @@ createApp({
       username: '',
       role: '',                  // 'admin' | 'user'
       userId: null,              // 当前用户 id（用户管理里禁用删除自己）
+      avatar: '',                // 当前用户头像 URL（/uploads/xxx；空=显示用户名首字符）
       userMenuOpen: false,       // 右上角用户下拉菜单
       changePwdOpen: false,      // 修改密码弹窗是否打开
       changePwdSaving: false,    // 修改密码请求进行中
       changePwdError: '',        // 修改密码错误提示
       changePwdForm: { oldPassword: '', newPassword: '' },  // 修改密码表单（旧密码 + 新密码）
+      changeAvatarOpen: false,   // 修改头像弹窗是否打开
+      changeAvatarSaving: false, // 修改头像上传请求进行中
+      changeAvatarError: '',     // 修改头像错误提示
+      avatarPreview: '',         // 修改头像弹窗里的本地图片预览（objectURL）
+      avatarFile: null,          // 修改头像弹窗里选中的文件
       loginTab: 'login',         // 登录页当前 Tab：'login' | 'register'
       loginForm: { username: '', password: '' },
       registerForm: { username: '', password: '', confirm: '' },
@@ -112,7 +118,7 @@ createApp({
   },
 
   computed: {
-    // 用户 logo：暂无头像，显示用户名首个字符
+    // 用户头像兜底文字：未设置头像时显示用户名首个字符
     userAvatarText() {
       return this.username ? this.username.charAt(0).toUpperCase() : '?';
     },
@@ -171,16 +177,17 @@ createApp({
     },
 
     // ---------- 认证 / 用户管理 ----------
-    setAuth(token, username, role, userId) {
+    setAuth(token, username, role, userId, avatar) {
       this.token = token;
       this.username = username;
       this.role = role;
       this.userId = userId;
+      this.avatar = avatar || '';
       this.authed = true;
-      try { localStorage.setItem('monitor.auth', JSON.stringify({ token, username, role, userId })); } catch (e) { /* 忽略 */ }
+      try { localStorage.setItem('monitor.auth', JSON.stringify({ token, username, role, userId, avatar: this.avatar })); } catch (e) { /* 忽略 */ }
     },
     clearAuth() {
-      this.token = ''; this.username = ''; this.role = ''; this.userId = null;
+      this.token = ''; this.username = ''; this.role = ''; this.userId = null; this.avatar = '';
       this.authed = false; this.userMenuOpen = false; this.changePwdOpen = false; this.tab = 'main';
       // 清空上一用户的数据，避免下一用户短暂看到缓存
       this.panels = []; this.widgets = []; this.availableNodes = [];
@@ -208,7 +215,7 @@ createApp({
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { this.authError = data.detail || '登录失败'; return; }
-        this.setAuth(data.token, data.username, data.role, data.userId);
+        this.setAuth(data.token, data.username, data.role, data.userId, data.avatar);
         this.startApp();
       } catch (e) {
         this.authError = '网络错误：' + e.message;
@@ -230,7 +237,7 @@ createApp({
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { this.authError = data.detail || '注册失败'; return; }
-        this.setAuth(data.token, data.username, data.role, data.userId);
+        this.setAuth(data.token, data.username, data.role, data.userId, data.avatar);
         this.startApp();
       } catch (e) {
         this.authError = '网络错误：' + e.message;
@@ -252,6 +259,59 @@ createApp({
     goAdminUsers() {
       this.userMenuOpen = false;
       this.switchTab('users');
+    },
+
+    // ---------- 修改头像（右上角用户下拉菜单进入） ----------
+    openChangeAvatar() {
+      this.userMenuOpen = false;
+      this.changeAvatarError = '';
+      this.avatarPreview = '';
+      this.avatarFile = null;
+      this.changeAvatarOpen = true;
+    },
+    closeChangeAvatar() {
+      this.changeAvatarOpen = false;
+      this.changeAvatarError = '';
+      this.avatarPreview = '';
+      this.avatarFile = null;
+    },
+    /** 选择头像文件：本地即时预览（不发起请求）；类型/大小不合法则清空并提示。 */
+    onAvatarFileChange(e) {
+      const file = e.target.files && e.target.files[0];
+      this.avatarFile = file || null;
+      this.changeAvatarError = '';
+      if (!file) { this.avatarPreview = ''; return; }
+      if (!/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) {
+        this.changeAvatarError = '仅支持 PNG / JPG / GIF / WebP 图片';
+        this.avatarFile = null;
+        this.avatarPreview = '';
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        this.changeAvatarError = '图片不能超过 2MB';
+        this.avatarFile = null;
+        this.avatarPreview = '';
+        return;
+      }
+      this.avatarPreview = URL.createObjectURL(file);
+    },
+    /** 确认修改：multipart 上传头像，成功后刷新右上角头像并持久化登录态。 */
+    async saveChangeAvatar() {
+      if (!this.avatarFile) { this.changeAvatarError = '请先选择图片'; return; }
+      this.changeAvatarSaving = true; this.changeAvatarError = '';
+      try {
+        const fd = new FormData();
+        fd.append('avatar', this.avatarFile);
+        const data = await this.api('/api/auth/avatar', { method: 'POST', body: fd });
+        this.avatar = data.avatar;
+        this.setAuth(this.token, this.username, this.role, this.userId, this.avatar);   // 同步持久化登录态
+        this.closeChangeAvatar();
+        alert('头像修改成功');
+      } catch (e) {
+        this.changeAvatarError = e.message;
+      } finally {
+        this.changeAvatarSaving = false;
+      }
     },
 
     // ---------- 修改密码（右上角用户下拉菜单进入） ----------
@@ -1298,7 +1358,7 @@ createApp({
         const res = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + savedAuth.token } });
         if (res.ok) {
           const me = await res.json();
-          this.setAuth(savedAuth.token, me.username, me.role, me.userId);
+          this.setAuth(savedAuth.token, me.username, me.role, me.userId, me.avatar);
           this.startApp();
           return;
         }

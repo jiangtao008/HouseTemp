@@ -78,7 +78,7 @@ done
 # 获取本机出口公网 IP（尽力而为，失败不阻断）
 PUBLIC_IP=""
 for URL in "https://api.ipify.org" "https://ifconfig.me/ip" "https://ipv4.icanhazip.com"; do
-  if PUBLIC_IP="$(curl -fsS --max-time 5 "$URL" 2>/dev/null | tr -d '\n')" && [ -n "$PUBLIC_IP" ]; then
+  if PUBLIC_IP="$(curl -4 -fsS --max-time 5 "$URL" 2>/dev/null | tr -d '\n')" && [ -n "$PUBLIC_IP" ]; then
     break
   fi
 done
