@@ -163,7 +163,10 @@ if [ "$NODE_BIN" != "/usr/bin/node" ]; then
   sed -i "s#ExecStart=.*#ExecStart=$NODE_BIN $APP_DIR/server.js#" "$UNIT"
 fi
 systemctl daemon-reload
-systemctl enable --now thermo-service
+systemctl enable thermo-service
+# 必须 restart（而不是 enable --now）：enable --now 对已运行的服务不会重启，
+# 新代码只会拷到磁盘而内存中的旧进程仍跑旧路由 → 新增接口会 404
+systemctl restart thermo-service
 sleep 1
 
 # ---------- 防火墙提示 ----------
