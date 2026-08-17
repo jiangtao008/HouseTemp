@@ -68,6 +68,15 @@ if [ "$NODE_MAJOR" -lt 18 ]; then
 fi
 echo "   ✓ Node.js $(node --version)"
 
+# 记录目标端现有依赖清单指纹（package.json / package-lock.json），
+# 供后面判断 npm install 是否真的需要（清单没变则跳过，避免每次部署都装依赖）
+PKG_FP_OLD=""
+for f in package.json package-lock.json; do
+  if [ -f "$APP_DIR/$f" ]; then
+    PKG_FP_OLD="$PKG_FP_OLD$(sha256sum "$APP_DIR/$f" | awk '{print $1}')"
+  fi
+done
+
 # ---------- 拷贝代码 ----------
 if [ "$SOURCE_DIR" = "$APP_DIR" ]; then
   echo "▸ 源码已在 $APP_DIR（如 clone 到此目录），跳过拷贝"
@@ -100,20 +109,40 @@ else
   echo "   ! 请编辑 $APP_DIR/config.json 设置 admin 密码与 MQTT 配置"
 fi
 
-# ---------- 安装 npm 依赖 ----------
-echo "▸ 安装 npm 依赖 ..."
-cd "$APP_DIR"
-ERR_LOG="$(mktemp)"
-if ! npm install --omit=dev --no-fund --no-audit 2>"$ERR_LOG"; then
-  echo "  ! npm install 失败，可能缺少 better-sqlite3 编译工具链" >&2
-  tail -n 20 "$ERR_LOG" >&2
-  echo "  正在安装 build-essential python3 后重试 ..." >&2
-  apt-get update -y
-  apt-get install -y build-essential python3
-  rm -f "$ERR_LOG"
-  npm install --omit=dev --no-fund --no-audit
+# ---------- 安装 npm 依赖（仅当依赖清单有变化或 node_modules 缺失；依赖没变则跳过，秒级完成） ----------
+PKG_FP_NEW=""
+for f in package.json package-lock.json; do
+  if [ -f "$SOURCE_DIR/$f" ]; then
+    PKG_FP_NEW="$PKG_FP_NEW$(sha256sum "$SOURCE_DIR/$f" | awk '{print $1}')"
+  fi
+done
+
+NEED_INSTALL=0
+if [ ! -d "$APP_DIR/node_modules" ]; then
+  echo "▸ node_modules 不存在，需要安装依赖"
+  NEED_INSTALL=1
+elif [ "$PKG_FP_OLD" != "$PKG_FP_NEW" ]; then
+  echo "▸ package.json / package-lock.json 有变化，重新安装依赖"
+  NEED_INSTALL=1
+else
+  echo "▸ 依赖清单无变化，跳过 npm install（沿用现有 node_modules）"
 fi
-rm -f "$ERR_LOG"
+
+if [ "$NEED_INSTALL" = "1" ]; then
+  echo "▸ 安装 npm 依赖 ..."
+  cd "$APP_DIR"
+  ERR_LOG="$(mktemp)"
+  if ! npm install --omit=dev --no-fund --no-audit 2>"$ERR_LOG"; then
+    echo "  ! npm install 失败，可能缺少 better-sqlite3 编译工具链" >&2
+    tail -n 20 "$ERR_LOG" >&2
+    echo "  正在安装 build-essential python3 后重试 ..." >&2
+    apt-get update -y
+    apt-get install -y build-essential python3
+    rm -f "$ERR_LOG"
+    npm install --omit=dev --no-fund --no-audit
+  fi
+  rm -f "$ERR_LOG"
+fi
 
 # ---------- 创建系统用户 ----------
 echo "▸ 创建系统用户 $APP_USER ..."
