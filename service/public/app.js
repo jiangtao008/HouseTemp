@@ -570,6 +570,26 @@ createApp({
         conn.topics.push(removed);   // 服务端拒绝时回滚
       }
     },
+    /** 编辑某条主题（topic 字符串）：校验后即时提交，非法/重复/服务端拒绝时回滚。
+     *  __orig 在 focus 时快照原值；enter 与 blur 都可能触发，处理完即删除避免重复提交。 */
+    async editConnTopic(conn, t) {
+      const orig = t.__orig;
+      delete t.__orig;
+      if (orig === undefined) return;              // 上一次已处理过
+      const nt = (t.topic || '').trim();
+      if (nt === orig) return;                     // 未改动
+      if (!nt) { alert('主题不能为空'); t.topic = orig; return; }
+      if (!isValidMqttTopic(nt)) { alert('主题不合法：' + nt); t.topic = orig; return; }
+      if (conn.topics.some((x) => x.topic === nt && x !== t)) {
+        alert('该主题已存在：' + nt);
+        t.topic = orig;
+        return;
+      }
+      t.topic = nt;
+      if (!(await this.applyTopics(conn))) {
+        t.topic = orig;   // 服务端拒绝时回滚
+      }
+    },
     /** 主题增删即时生效：只提交主题列表，服务端对在线连接增量订阅、不重连。 */
     applyTopics(conn) {
       // 同一连接的多次主题修改串行提交，避免乱序覆盖

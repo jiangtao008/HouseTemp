@@ -13,7 +13,19 @@
     <header class="topbar">
       <template v-if="editPanelId === null">
         <button v-if="prevPanel" class="nav-btn" @click="prev" aria-label="上一个面板">‹</button>
-        <button v-else class="nav-btn home-btn" @click="goHome" aria-label="返回 PC 主页面">PC主页</button>
+        <!-- 第一个面板无「上一个」时，左上角显示用户头像 → 点击弹出用户菜单 -->
+        <div v-else class="user-area" @click="toggleUserMenu">
+          <span class="user-avatar">
+            <img v-if="avatar" class="user-avatar-img" :src="avatar" alt="头像">
+            <template v-else>{{ userAvatarText }}</template>
+          </span>
+          <div v-show="userMenuOpen" class="user-menu" @click.stop>
+            <button class="user-menu-item" @click="openChangeAvatar">修改头像</button>
+            <button class="user-menu-item" @click="openChangePwd">修改密码</button>
+            <button class="user-menu-item" @click="goPC">PC页</button>
+            <button class="user-menu-item danger" @click="logout">退出登录</button>
+          </div>
+        </div>
         <div class="topbar-title">
           <span class="panel-name">{{ currentPanel ? currentPanel.name : '--' }}</span>
           <span class="panel-count" v-if="panels.length > 1">{{ currentIndex + 1 }} / {{ panels.length }}</span>
@@ -143,6 +155,55 @@
           <p v-if="authError" class="login-error">{{ authError }}</p>
           <button class="login-submit" type="submit" :disabled="authBusy">{{ authBusy ? '注册中…' : '注 册' }}</button>
         </form>
+      </div>
+    </div>
+
+    <!-- 修改密码弹窗（顶部用户菜单进入）：先校验旧密码，成功后提示结果 -->
+    <div v-if="changePwdOpen" class="modal-overlay" @click.self="closeChangePwd">
+      <div class="modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <span class="modal-title">修改密码</span>
+          <button class="modal-close" title="关闭" @click="closeChangePwd">✕</button>
+        </div>
+        <label class="login-label">旧密码</label>
+        <input class="login-input" type="password" v-model="changePwdForm.oldPassword"
+               placeholder="请输入当前密码" autocomplete="current-password">
+        <label class="login-label">新密码</label>
+        <input class="login-input" type="password" v-model="changePwdForm.newPassword"
+               placeholder="请输入新密码（至少 6 位）" autocomplete="new-password">
+        <p v-if="changePwdError" class="login-error">{{ changePwdError }}</p>
+        <div class="modal-foot">
+          <button class="modal-btn" @click="closeChangePwd">取消</button>
+          <button class="modal-btn primary" @click="saveChangePwd" :disabled="changePwdSaving">
+            {{ changePwdSaving ? '提交中…' : '确认修改' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修改头像弹窗（顶部用户菜单进入）：选择图片即时预览，确认后上传 -->
+    <div v-if="changeAvatarOpen" class="modal-overlay" @click.self="closeChangeAvatar">
+      <div class="modal-card" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <span class="modal-title">修改头像</span>
+          <button class="modal-close" title="关闭" @click="closeChangeAvatar">✕</button>
+        </div>
+        <div class="avatar-preview-wrap">
+          <div class="avatar-preview">
+            <img v-if="avatarPreview" :src="avatarPreview" alt="头像预览">
+            <span v-else>未选择图片</span>
+          </div>
+        </div>
+        <label class="login-label">选择头像图片</label>
+        <input class="login-input" type="file" accept="image/png,image/jpeg,image/gif,image/webp" @change="onAvatarFileChange">
+        <p class="login-hint">支持 PNG / JPG / GIF / WebP，大小不超过 2MB</p>
+        <p v-if="changeAvatarError" class="login-error">{{ changeAvatarError }}</p>
+        <div class="modal-foot">
+          <button class="modal-btn" @click="closeChangeAvatar">取消</button>
+          <button class="modal-btn primary" @click="saveChangeAvatar" :disabled="changeAvatarSaving">
+            {{ changeAvatarSaving ? '上传中…' : '确认修改' }}
+          </button>
+        </div>
       </div>
     </div>
   </div>

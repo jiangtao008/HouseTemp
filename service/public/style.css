@@ -917,7 +917,18 @@ body {
   outline: none;
   cursor: pointer;
 }
-.topic-row .topic-name { flex: 1; min-width: 0; word-break: break-all; }
+.topic-row .topic-name {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 13px;
+  color: #fff;
+  background: #262936;
+  border: 1px solid #33374a;
+  border-radius: 6px;
+  outline: none;
+}
+.topic-row .topic-name:focus { border-color: #3b5bdb; }
 /* 主题后展示的最新节点数据 / 状态 / 时间（订阅页） */
 .topic-latest {
   display: inline-flex;

@@ -39,6 +39,20 @@ createApp({
       loginTab: 'login',            // 登录弹窗当前 Tab：'login' | 'register'
       loginForm: { username: '', password: '' },
       registerForm: { username: '', password: '', confirm: '' },
+      username: '',                 // 当前用户名（顶部用户菜单）
+      role: '',                     // 当前用户角色
+      userId: null,                 // 当前用户 id
+      avatar: '',                   // 当前用户头像 URL（/uploads/xxx；空=显示用户名首字符）
+      userMenuOpen: false,          // 顶部用户下拉菜单
+      changePwdOpen: false,         // 修改密码弹窗
+      changePwdSaving: false,       // 修改密码请求进行中
+      changePwdError: '',           // 修改密码错误提示
+      changePwdForm: { oldPassword: '', newPassword: '' },   // 修改密码表单（旧密码 + 新密码）
+      changeAvatarOpen: false,      // 修改头像弹窗
+      changeAvatarSaving: false,    // 修改头像上传请求进行中
+      changeAvatarError: '',        // 修改头像错误提示
+      avatarPreview: '',            // 修改头像弹窗里的本地图片预览（objectURL）
+      avatarFile: null,             // 修改头像弹窗里选中的文件
       panels: [],                   // 面板容器（一次一个，横向分页）
       widgets: [],                  // 节点小面板
       currentIndex: 0,              // 当前显示的面板索引
@@ -68,6 +82,10 @@ createApp({
 
   computed: {
     COL_OPTIONS() { return COL_OPTIONS; },
+    // 用户头像兜底文字：未设置头像时显示用户名首个字符
+    userAvatarText() {
+      return this.username ? this.username.charAt(0).toUpperCase() : '?';
+    },
     currentPanel() {
       return this.panels[this.currentIndex] || null;
     },
@@ -174,6 +192,9 @@ createApp({
     showLogin() {
       if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null; }
       this.token = '';
+      this.username = ''; this.role = ''; this.userId = null; this.avatar = '';
+      this.userMenuOpen = false;
+      this.changePwdOpen = false; this.changeAvatarOpen = false;
       try { localStorage.removeItem('monitor.auth'); } catch (e) { /* ignore */ }
       this.needsLogin = true;
       this.authError = '';
@@ -222,14 +243,24 @@ createApp({
     /** 登录/注册成功：写与主界面同键的 localStorage（跨页共享登录态）→ 关弹窗 → 拉数据并轮询。 */
     setAuthed(data) {
       this.token = data.token;
-      try {
-        localStorage.setItem('monitor.auth', JSON.stringify({ token: data.token, username: data.username, role: data.role, userId: data.userId }));
-      } catch (e) { /* ignore */ }
+      this.username = data.username || '';
+      this.role = data.role || '';
+      this.userId = data.userId != null ? data.userId : null;
+      this.avatar = data.avatar || '';
+      this.saveAuthLocal();
       this.needsLogin = false;
       this.authError = '';
       this.loginForm.password = '';
       this.registerForm = { username: '', password: '', confirm: '' };
       this.startPolling();
+    },
+    /** 持久化登录态到 localStorage（与主界面同键，跨页共享）。 */
+    saveAuthLocal() {
+      try {
+        localStorage.setItem('monitor.auth', JSON.stringify({
+          token: this.token, username: this.username, role: this.role, userId: this.userId, avatar: this.avatar,
+        }));
+      } catch (e) { /* ignore */ }
     },
 
     // ---------- 数据 ----------
@@ -304,9 +335,109 @@ createApp({
     next() {
       this.switchTo(this.currentIndex + 1);
     },
-    /** 第一个面板无「上一个」时，左上角改为 PC 主页按钮 → 返回桌面主页面。 */
-    goHome() {
+    /** 第一个面板无「上一个」时，左上角显示用户头像 → 点击弹出用户菜单。 */
+    toggleUserMenu() {
+      this.userMenuOpen = !this.userMenuOpen;
+    },
+    /** 菜单「PC页」→ 返回桌面主页面。 */
+    goPC() {
+      this.userMenuOpen = false;
       location.href = '/';
+    },
+    /** 菜单「退出登录」→ 清本地登录态并停留本页登录/注册弹窗，再调服务端注销。 */
+    async logout() {
+      const t = this.token;
+      this.showLogin();
+      if (t) {
+        try { await fetch('/api/auth/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + t } }); } catch (e) { /* ignore */ }
+      }
+    },
+
+    // ---------- 修改密码（顶部用户菜单进入，与主界面同接口） ----------
+    openChangePwd() {
+      this.userMenuOpen = false;
+      this.changePwdForm = { oldPassword: '', newPassword: '' };
+      this.changePwdError = '';
+      this.changePwdOpen = true;
+    },
+    closeChangePwd() {
+      this.changePwdOpen = false;
+      this.changePwdError = '';
+    },
+    /** 确认修改：前端基本校验，服务端先验证旧密码再更新；结果用 alert 提示。 */
+    async saveChangePwd() {
+      const oldPassword = this.changePwdForm.oldPassword;
+      const newPassword = this.changePwdForm.newPassword;
+      if (!oldPassword || !newPassword) { this.changePwdError = '请输入旧密码和新密码'; return; }
+      if (newPassword.length < 6) { this.changePwdError = '新密码至少 6 位'; return; }
+      this.changePwdSaving = true; this.changePwdError = '';
+      try {
+        await this.api('/api/auth/password', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ oldPassword, newPassword }),
+        });
+        this.changePwdOpen = false;
+        this.changePwdError = '';
+        alert('密码修改成功');
+      } catch (e) {
+        this.changePwdError = e.message;
+      } finally {
+        this.changePwdSaving = false;
+      }
+    },
+
+    // ---------- 修改头像（顶部用户菜单进入，与主界面同接口） ----------
+    openChangeAvatar() {
+      this.userMenuOpen = false;
+      this.changeAvatarError = '';
+      this.avatarPreview = '';
+      this.avatarFile = null;
+      this.changeAvatarOpen = true;
+    },
+    closeChangeAvatar() {
+      this.changeAvatarOpen = false;
+      this.changeAvatarError = '';
+      this.avatarPreview = '';
+      this.avatarFile = null;
+    },
+    /** 选择头像文件：本地即时预览（不发起请求）；类型/大小不合法则清空并提示。 */
+    onAvatarFileChange(e) {
+      const file = e.target.files && e.target.files[0];
+      this.avatarFile = file || null;
+      this.changeAvatarError = '';
+      if (!file) { this.avatarPreview = ''; return; }
+      if (!/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) {
+        this.changeAvatarError = '仅支持 PNG / JPG / GIF / WebP 图片';
+        this.avatarFile = null;
+        this.avatarPreview = '';
+        return;
+      }
+      if (file.size > 2 * 1024 * 1024) {
+        this.changeAvatarError = '图片不能超过 2MB';
+        this.avatarFile = null;
+        this.avatarPreview = '';
+        return;
+      }
+      this.avatarPreview = URL.createObjectURL(file);
+    },
+    /** 确认修改：multipart 上传头像，成功后刷新顶部头像并持久化登录态。 */
+    async saveChangeAvatar() {
+      if (!this.avatarFile) { this.changeAvatarError = '请先选择图片'; return; }
+      this.changeAvatarSaving = true; this.changeAvatarError = '';
+      try {
+        const fd = new FormData();
+        fd.append('avatar', this.avatarFile);
+        const data = await this.api('/api/auth/avatar', { method: 'POST', body: fd });
+        this.avatar = data.avatar;
+        this.saveAuthLocal();
+        this.closeChangeAvatar();
+        alert('头像修改成功');
+      } catch (e) {
+        this.changeAvatarError = e.message;
+      } finally {
+        this.changeAvatarSaving = false;
+      }
     },
     switchTo(i) {
       const el = this.$refs.pager;
@@ -736,11 +867,24 @@ createApp({
       try {
         const res = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + this.token } });
         if (!res.ok) throw new Error('auth failed');
+        const me = await res.json();
+        this.username = me.username || saved.username || '';
+        this.role = me.role || saved.role || '';
+        this.userId = me.userId != null ? me.userId : (saved.userId != null ? saved.userId : null);
+        this.avatar = me.avatar || saved.avatar || '';
+        this.saveAuthLocal();
         this.startPolling();
       } catch (e) {
         this.showLogin();
       }
     })();
+    // 点击页面其他区域时收起顶部用户菜单
+    this._closeMenu = (e) => {
+      if (this.userMenuOpen && !(e.target && e.target.closest && e.target.closest('.user-area'))) {
+        this.userMenuOpen = false;
+      }
+    };
+    document.addEventListener('click', this._closeMenu);
     // 详情页历史记录：系统返回键 / 边缘滑动返回触发 popstate → 关闭详情
     this._onPop = () => {
       if (this.detailId) { this.detailId = null; this.detailPoints = []; }
@@ -753,5 +897,6 @@ createApp({
     this.pollTimer = null;
     this._unbindWinHandlers();
     if (this._onPop) window.removeEventListener('popstate', this._onPop);
+    if (this._closeMenu) document.removeEventListener('click', this._closeMenu);
   },
 }).mount('#app');

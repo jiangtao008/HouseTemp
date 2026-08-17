@@ -302,7 +302,9 @@
                       <option value="thermo">温湿度</option>
                       <option value="switch">开关（待支持）</option>
                     </select>
-                    <span class="mono topic-name" :title="t.topic">{{ t.topic }}</span>
+                    <input class="mono topic-name" v-model="t.topic" :title="t.topic"
+                           placeholder="如 gateway_1/node_5/temperature"
+                           @focus="t.__orig = t.topic" @change="editConnTopic(conn, t)" @keyup.enter="editConnTopic(conn, t)">
                     <!-- 主题后展示该主题最新上报节点的数据 / 状态 / 时间 -->
                     <span class="topic-latest" :title="t.latest ? '节点 ' + t.latest.name + ' · 最近上报 ' + t.latest.last_seen : '该主题尚未收到节点数据'">
                       <template v-if="t.latest">
