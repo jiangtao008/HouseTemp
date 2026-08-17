@@ -75,11 +75,12 @@ else
   echo "▸ 拷贝代码到 $APP_DIR ..."
   mkdir -p "$APP_DIR"
   if command -v rsync >/dev/null 2>&1; then
-    # --delete 保证目标干净；data/、node_modules、日志、macOS 垃圾文件不参与同步
-    #（--exclude 的目录在目标端不会被 --delete 误删，重跑安全）
+    # --delete 保证目标干净；data/、uploads/（用户上传的头像）、node_modules、日志、
+    # macOS 垃圾文件不参与同步（--exclude 的目录在目标端不会被 --delete 误删，重跑安全）
     rsync -a --delete \
       --exclude 'node_modules/' \
       --exclude 'data/' \
+      --exclude 'public/uploads/' \
       --exclude 'server.log' \
       --exclude '.DS_Store' \
       "$SOURCE_DIR/" "$APP_DIR/"
