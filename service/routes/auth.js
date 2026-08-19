@@ -124,15 +124,31 @@ router.post('/login', (req, res) => {
   res.json({ token, username: user.username, role: user.role, userId: user.id, avatar: user.avatar || '' });
 });
 
+/** 注册码错误 → HTTP 状态 + 中文提示。 */
+const REG_CODE_ERRORS = {
+  not_found:      { status: 400, detail: '注册码不存在' },
+  used:           { status: 400, detail: '注册码已被使用' },
+  expired:        { status: 400, detail: '注册码已过期' },
+  username_taken: { status: 409, detail: '用户名已存在' },
+  unknown:        { status: 400, detail: '注册失败，请稍后重试' },
+};
+
+/** 注册：需凭有效注册码（一人一码，事务内校验码状态/有效期 → 建号 → 占码）。 */
 router.post('/register', (req, res) => {
   const body = req.body || {};
   const name = String(body.username == null ? '' : body.username).trim();
   const password = String(body.password == null ? '' : body.password);
+  const regCode = String(body.regCode == null ? '' : body.regCode).trim();
   if (!validUsername(name)) return res.status(400).json({ detail: '用户名需为 2-32 个字符且不含空格' });
   if (password.length < 6) return res.status(400).json({ detail: '密码至少 6 位' });
-  if (db.getUserByUsername(name)) return res.status(409).json({ detail: '用户名已存在' });
+  if (!regCode) return res.status(400).json({ detail: '请输入注册码' });
 
-  const user = db.createUser(name, hashPassword(password), 'user');
+  const result = db.registerWithCode(name, hashPassword(password), regCode);
+  if (result.error) {
+    const err = REG_CODE_ERRORS[result.error] || REG_CODE_ERRORS.unknown;
+    return res.status(err.status).json({ detail: err.detail });
+  }
+  const user = result.user;
   // 新用户按 config.json 初始化默认 MQTT 连接（开箱即用），失败不阻断注册
   const cfg = req.app.locals.cfg || {};
   try { db.seedDefaultConnection(user.id, cfg); } catch (e) { console.error('初始化默认 MQTT 连接失败:', e); }

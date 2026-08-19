@@ -68,7 +68,19 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT    NOT NULL,                          -- scrypt 哈希，存 salt:hash
     role          TEXT    NOT NULL DEFAULT 'user',           -- 'admin' | 'user'
     avatar        TEXT,                                      -- 头像图片 URL（/uploads/xxx；空=显示用户名首字符）
+    reg_code      TEXT,                                      -- 注册时使用的注册码（可空：管理员 / 迁移旧数据）
     created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+-- 注册码（邀请制注册）：一个注册码只能注册一个账号；expires_at 可空 = 永久有效
+CREATE TABLE IF NOT EXISTS reg_codes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT    NOT NULL UNIQUE COLLATE NOCASE,      -- 注册码（不区分大小写唯一）
+    status      INTEGER NOT NULL DEFAULT 0,                  -- 0=未使用 1=已使用
+    used_by     INTEGER,                                     -- 使用该码注册的用户 id（可空：未使用）
+    used_at     TEXT,                                        -- 使用时间（可空）
+    expires_at  TEXT,                                        -- 有效期截止（ISO；NULL=永久）
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -427,6 +439,15 @@ function migrateUserAvatar() {
   }
 }
 
+/** users 表增加 reg_code 列（注册时使用的注册码）。按列存在性幂等。 */
+function migrateUserRegCode() {
+  const cols = db.prepare('PRAGMA table_info(users)').all();
+  if (!cols.some((c) => c.name === 'reg_code')) {
+    db.exec('ALTER TABLE users ADD COLUMN reg_code TEXT');
+    console.log('users 表已增加 reg_code 列（注册码）');
+  }
+}
+
 function init(cfg) {
   fs.mkdirSync(path.dirname(cfg.database.path), { recursive: true });
   db = new Database(cfg.database.path);
@@ -446,15 +467,16 @@ function init(cfg) {
   migrateWidgetChartLayout();
   migrateMobileGrid();
   migrateUserAvatar();
+  migrateUserRegCode();
 }
 
 // ---------------------------------------------------------------------------
 // 用户 / 会话（多用户认证）
 // ---------------------------------------------------------------------------
 
-function createUser(username, passwordHash, role = 'user') {
-  const info = db.prepare('INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)')
-    .run(username, passwordHash, role, nowIso());
+function createUser(username, passwordHash, role = 'user', regCode) {
+  const info = db.prepare('INSERT INTO users (username, password_hash, role, reg_code, created_at) VALUES (?, ?, ?, ?, ?)')
+    .run(username, passwordHash, role, regCode || null, nowIso());
   return getUserById(info.lastInsertRowid);
 }
 
@@ -467,7 +489,7 @@ function getUserById(id) {
 }
 
 function listUsers() {
-  return db.prepare('SELECT id, username, role, avatar, created_at FROM users ORDER BY id').all();
+  return db.prepare('SELECT id, username, role, avatar, reg_code, created_at FROM users ORDER BY id').all();
 }
 
 function setUserPassword(id, hash) {
@@ -489,8 +511,10 @@ function countAdmins() {
   return db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'").get().n;
 }
 
-/** 删除用户并显式级联清理其全部数据（FK 未强制开启，需手动删）。 */
+/** 删除用户并显式级联清理其全部数据（FK 未强制开启，需手动删）。
+ * 其注册码回退为「未使用」，便于重新分配。 */
 function deleteUser(id) {
+  db.prepare('UPDATE reg_codes SET status = 0, used_by = NULL, used_at = NULL WHERE used_by = ?').run(id);
   db.prepare('DELETE FROM topic_panels WHERE user_id = ?').run(id);
   db.prepare('DELETE FROM panels WHERE user_id = ?').run(id);
   db.prepare('DELETE FROM nodes WHERE user_id = ?').run(id);
@@ -550,6 +574,80 @@ function seedDefaultConnection(userId, cfg) {
   });
   syncTopicPanels(conn.id, conn.topics);
   return conn;
+}
+
+// ---------------------------------------------------------------------------
+// 注册码（reg_codes 表：随机生成、批量管理、一人一码）
+// ---------------------------------------------------------------------------
+
+/** 注册码字符集：排除易混淆字符（0/O、1/I/L），大写字母 + 数字。 */
+const REG_CODE_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+/** 生成一个随机注册码（长度默认 8 位）。 */
+function makeRegCode(length = 8) {
+  const n = Math.min(16, Math.max(4, Math.trunc(Number(length)) || 8));
+  let out = '';
+  for (let i = 0; i < n; i++) out += REG_CODE_CHARSET[Math.floor(Math.random() * REG_CODE_CHARSET.length)];
+  return out;
+}
+
+/** 全部注册码（含使用用户），按 id 倒序（新的在前）。 */
+function listRegCodes() {
+  return db.prepare(
+    `SELECT rc.*, u.username AS used_username FROM reg_codes rc
+     LEFT JOIN users u ON u.id = rc.used_by
+     ORDER BY rc.id DESC`
+  ).all();
+}
+
+/** 批量创建注册码：去空、去重（含库内已存在，INSERT OR IGNORE），返回实际创建的行。 */
+function createRegCodes(codes, expiresAt) {
+  const now = nowIso();
+  const stmt = db.prepare('INSERT OR IGNORE INTO reg_codes (code, status, expires_at, created_at) VALUES (?, 0, ?, ?)');
+  const created = [];
+  const seen = new Set();
+  for (const raw of codes) {
+    const code = String(raw == null ? '' : raw).trim().toUpperCase();
+    if (!code || seen.has(code)) continue;
+    seen.add(code);
+    const info = stmt.run(code, expiresAt || null, now);
+    if (info.changes > 0) created.push(db.prepare('SELECT * FROM reg_codes WHERE id = ?').get(info.lastInsertRowid));
+  }
+  return created;
+}
+
+/** 批量删除注册码（ids 数组；仅未使用的可删，已使用/已过期一律不删，防止破坏已注册账号的关联记录）。 */
+function deleteRegCodes(ids) {
+  const clean = ids.map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  if (!clean.length) return { changes: 0 };
+  const placeholders = clean.map(() => '?').join(',');
+  return db.prepare(`DELETE FROM reg_codes WHERE id IN (${placeholders}) AND status = 0`).run(...clean);
+}
+
+/** 用注册码注册用户（一人一码：事务内校验码状态/有效期 → 建号 → 占码）。
+ * 返回 { user } 或 { error }；error 值：not_found / used / expired / username_taken / unknown。 */
+function registerWithCode(username, passwordHash, regCode) {
+  const code = String(regCode == null ? '' : regCode).trim().toUpperCase();
+  db.exec('BEGIN');
+  try {
+    const row = db.prepare('SELECT * FROM reg_codes WHERE code = ?').get(code);
+    if (!row) return db.exec('ROLLBACK'), { error: 'not_found' };
+    if (row.status === 1) return db.exec('ROLLBACK'), { error: 'used' };
+    if (row.expires_at && row.expires_at < nowIso()) return db.exec('ROLLBACK'), { error: 'expired' };
+    if (db.prepare('SELECT 1 FROM users WHERE username = ? COLLATE NOCASE').get(username)) {
+      return db.exec('ROLLBACK'), { error: 'username_taken' };
+    }
+    const info = db.prepare('INSERT INTO users (username, password_hash, role, reg_code, created_at) VALUES (?, ?, ?, ?, ?)')
+      .run(username, passwordHash, 'user', code, nowIso());
+    db.prepare('UPDATE reg_codes SET status = 1, used_by = ?, used_at = ? WHERE id = ?')
+      .run(info.lastInsertRowid, nowIso(), row.id);
+    db.exec('COMMIT');
+    return { user: getUserById(info.lastInsertRowid) };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    console.error('注册失败（事务已回滚）:', err);
+    return { error: 'unknown' };
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1085,6 +1183,12 @@ module.exports = {
   getUserSetting,
   setUserSetting,
   seedDefaultConnection,
+  // 注册码
+  makeRegCode,
+  listRegCodes,
+  createRegCodes,
+  deleteRegCodes,
+  registerWithCode,
   // 节点
   listNodes,
   getNode,

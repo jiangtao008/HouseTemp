@@ -152,6 +152,8 @@
           <input class="login-input" v-model="registerForm.password" type="password" placeholder="至少 6 位" autocomplete="new-password">
           <label class="login-label">确认密码</label>
           <input class="login-input" v-model="registerForm.confirm" type="password" placeholder="再次输入密码" autocomplete="new-password">
+          <label class="login-label">注册码</label>
+          <input class="login-input" v-model="registerForm.regCode" placeholder="请输入注册码（向管理员索取）" autocomplete="off">
           <p v-if="authError" class="login-error">{{ authError }}</p>
           <button class="login-submit" type="submit" :disabled="authBusy">{{ authBusy ? '注册中…' : '注 册' }}</button>
         </form>

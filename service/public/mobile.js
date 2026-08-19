@@ -38,7 +38,7 @@ createApp({
       authError: '',                // 登录/注册错误提示
       loginTab: 'login',            // 登录弹窗当前 Tab：'login' | 'register'
       loginForm: { username: '', password: '' },
-      registerForm: { username: '', password: '', confirm: '' },
+      registerForm: { username: '', password: '', confirm: '', regCode: '' },
       username: '',                 // 当前用户名（顶部用户菜单）
       role: '',                     // 当前用户角色
       userId: null,                 // 当前用户 id
@@ -223,13 +223,15 @@ createApp({
       const username = this.registerForm.username.trim();
       const password = this.registerForm.password;
       const confirm = this.registerForm.confirm;
+      const regCode = this.registerForm.regCode.trim();
       if (!username || !password) { this.authError = '请输入用户名和密码'; return; }
       if (password !== confirm) { this.authError = '两次输入的密码不一致'; return; }
+      if (!regCode) { this.authError = '请输入注册码'; return; }
       this.authBusy = true; this.authError = '';
       try {
         const res = await fetch('/api/auth/register', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ username, password, regCode }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { this.authError = data.detail || '注册失败'; return; }
@@ -251,7 +253,7 @@ createApp({
       this.needsLogin = false;
       this.authError = '';
       this.loginForm.password = '';
-      this.registerForm = { username: '', password: '', confirm: '' };
+      this.registerForm = { username: '', password: '', confirm: '', regCode: '' };
       this.startPolling();
     },
     /** 持久化登录态到 localStorage（与主界面同键，跨页共享）。 */

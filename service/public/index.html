@@ -34,6 +34,8 @@
           <input class="login-input" v-model="registerForm.password" type="password" placeholder="至少 6 位" autocomplete="new-password">
           <label class="login-label">确认密码</label>
           <input class="login-input" v-model="registerForm.confirm" type="password" placeholder="再次输入密码" autocomplete="new-password">
+          <label class="login-label">注册码</label>
+          <input class="login-input" v-model="registerForm.regCode" placeholder="请输入注册码（向管理员索取）" autocomplete="off">
           <p v-if="authError" class="login-error">{{ authError }}</p>
           <button class="btn primary login-submit" type="submit" :disabled="authBusy">{{ authBusy ? '注册中…' : '注 册' }}</button>
         </form>
@@ -358,6 +360,7 @@
         <div class="users-row users-head-row">
           <span class="u-col u-name">用户名</span>
           <span class="u-col u-role">角色</span>
+          <span class="u-col u-code">注册码</span>
           <span class="u-col u-time">注册时间</span>
           <span class="u-col u-actions">操作</span>
         </div>
@@ -366,6 +369,7 @@
           <span class="u-col u-role">
             <span class="role-badge" :class="{ admin: u.role === 'admin' }">{{ u.role === 'admin' ? '管理员' : '用户' }}</span>
           </span>
+          <span class="u-col u-code mono" :title="u.reg_code">{{ u.reg_code || '--' }}</span>
           <span class="u-col u-time">{{ fmtDate(u.created_at) }}</span>
           <span class="u-col u-actions">
             <button class="btn btn-mini" @click="resetUserPassword(u)">重置密码</button>
@@ -373,6 +377,48 @@
                     @click="deleteUser(u)">删除</button>
           </span>
         </div>
+      </div>
+
+      <!-- 注册码管理：随机生成、批量管理，注册需凭有效注册码 -->
+      <div class="codes-block">
+        <div class="codes-head">
+          <span class="users-title">注册码管理</span>
+          <span class="users-sub">注册需凭有效注册码；一个注册码只能注册一个账号</span>
+          <div class="codes-actions">
+            <button class="btn btn-mini" @click="openGenCodes">批量生成</button>
+            <button class="btn btn-mini conn-del" :disabled="!regSelected.length" @click="deleteSelectedCodes">
+              删除选中{{ regSelected.length ? '（' + regSelected.length + '）' : '' }}
+            </button>
+          </div>
+        </div>
+        <div class="codes-table">
+          <div class="codes-row codes-head-row">
+            <span class="c-col c-check">
+              <input type="checkbox" :checked="regAllChecked" :disabled="!regCodes.length" @change="toggleAllCodes" title="全选">
+            </span>
+            <span class="c-col c-code">注册码</span>
+            <span class="c-col c-status">状态</span>
+            <span class="c-col c-expire">有效期</span>
+            <span class="c-col c-user">使用用户</span>
+            <span class="c-col c-used">使用时间</span>
+            <span class="c-col c-actions">操作</span>
+          </div>
+          <div v-for="c in regCodes" :key="c.id" class="codes-row">
+            <span class="c-col c-check">
+              <input type="checkbox" :value="c.id" v-model="regSelected" :disabled="codeStatus(c) === 'used'" :title="codeStatus(c) === 'used' ? '已使用的注册码不可删除' : ''">
+            </span>
+            <span class="c-col c-code mono">{{ c.code }}</span>
+            <span class="c-col c-status"><span class="code-badge" :class="codeStatus(c)">{{ codeStatusText(c) }}</span></span>
+            <span class="c-col c-expire">{{ fmtExpiry(c) }}</span>
+            <span class="c-col c-user" :title="c.used_username">{{ c.used_username || '--' }}</span>
+            <span class="c-col c-used">{{ fmtDate(c.used_at) }}</span>
+            <span class="c-col c-actions">
+              <button class="btn btn-mini conn-del" :disabled="codeStatus(c) === 'used'" @click="deleteCode(c)">删除</button>
+            </span>
+          </div>
+          <div v-if="!regCodes.length" class="codes-empty">暂无注册码，点击「批量生成」创建</div>
+        </div>
+        <p class="codes-tip">已使用的注册码不可删除（删除用户后对应注册码自动回退为未使用，可重新分配）；删除未使用或已过期的注册码后不可恢复。</p>
       </div>
     </main>
 
@@ -468,6 +514,42 @@
           <button class="btn" @click="closeChangeAvatar">取消</button>
           <button class="btn primary" @click="saveChangeAvatar" :disabled="changeAvatarSaving">
             {{ changeAvatarSaving ? '上传中…' : '确认修改' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 批量生成注册码弹窗：用户管理页「注册码管理」进入；随机生成、可设有效期（默认永久） -->
+    <div v-if="genCodesOpen" class="modal-mask" @click.self="closeGenCodes">
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="modal-head">
+          <span class="modal-title">批量生成注册码</span>
+          <button class="modal-close" title="关闭" @click="closeGenCodes">✕</button>
+        </div>
+        <div class="modal-body">
+          <label class="modal-field">
+            <span class="modal-field-label">生成数量</span>
+            <input class="login-input gen-input" type="number" min="1" max="500" v-model.number="genCodeForm.count">
+          </label>
+          <label class="modal-field">
+            <span class="modal-field-label">注册码位数</span>
+            <input class="login-input gen-input" type="number" min="4" max="16" v-model.number="genCodeForm.length">
+          </label>
+          <label class="modal-check">
+            <input type="checkbox" v-model="genCodeForm.permanent">
+            <span>永久有效（不勾选则设置有效期）</span>
+          </label>
+          <label class="modal-field" v-if="!genCodeForm.permanent">
+            <span class="modal-field-label">有效期至</span>
+            <input class="login-input" type="date" v-model="genCodeForm.expiresDate">
+          </label>
+          <p class="modal-tip">注册码随机生成，自动排除易混淆字符（0/O、1/I/L）；未设置有效期即永久有效；一个注册码只能注册一个账号。</p>
+          <p v-if="genCodesError" class="login-error">{{ genCodesError }}</p>
+        </div>
+        <div class="modal-foot">
+          <button class="btn" @click="closeGenCodes">取消</button>
+          <button class="btn primary" @click="submitGenCodes" :disabled="genCodesSaving">
+            {{ genCodesSaving ? '生成中…' : '生 成' }}
           </button>
         </div>
       </div>

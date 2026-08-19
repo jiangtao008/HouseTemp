@@ -83,9 +83,15 @@ createApp({
       avatarFile: null,          // 修改头像弹窗里选中的文件
       loginTab: 'login',         // 登录页当前 Tab：'login' | 'register'
       loginForm: { username: '', password: '' },
-      registerForm: { username: '', password: '', confirm: '' },
+      registerForm: { username: '', password: '', confirm: '', regCode: '' },
       authError: '',             // 登录/注册错误提示
       users: [],                 // 用户管理列表（仅管理员加载）
+      regCodes: [],              // 注册码列表（用户管理页，仅管理员加载）
+      regSelected: [],           // 注册码表格勾选的行 id（批量删除）
+      genCodesOpen: false,       // 批量生成注册码弹窗是否打开
+      genCodesSaving: false,     // 批量生成请求进行中
+      genCodesError: '',         // 批量生成错误提示
+      genCodeForm: { count: 10, length: 8, permanent: true, expiresDate: '' },  // 批量生成表单
       tab: 'main',
       panels: [],                // 面板容器（主舞台一次显示一个）
       widgets: [],               // 节点小面板（归属某个面板容器）
@@ -121,6 +127,10 @@ createApp({
     // 用户头像兜底文字：未设置头像时显示用户名首个字符
     userAvatarText() {
       return this.username ? this.username.charAt(0).toUpperCase() : '?';
+    },
+    // 注册码表格是否全选（有数据且全部勾选）
+    regAllChecked() {
+      return this.regCodes.length > 0 && this.regSelected.length === this.regCodes.length;
     },
     // 当前选中的面板容器（主舞台只显示它）
     selectedPanel() {
@@ -191,7 +201,7 @@ createApp({
       this.authed = false; this.userMenuOpen = false; this.changePwdOpen = false; this.tab = 'main';
       // 清空上一用户的数据，避免下一用户短暂看到缓存
       this.panels = []; this.widgets = []; this.availableNodes = [];
-      this.mqttConns = []; this.users = []; this.widgetCharts = {};
+      this.mqttConns = []; this.users = []; this.regCodes = []; this.regSelected = []; this.widgetCharts = {};
       this.selectedPanelId = null; this.widgetSettings = null; this.widgetDetail = null;
       this.detailRange = '1d'; this.detailHover = null;
       // 释放舞台监听，重新登录后再建（旧 stageBox 已随 v-else 移除）
@@ -227,13 +237,15 @@ createApp({
       const username = this.registerForm.username.trim();
       const password = this.registerForm.password;
       const confirm = this.registerForm.confirm;
+      const regCode = this.registerForm.regCode.trim();
       if (!username || !password) { this.authError = '请输入用户名和密码'; return; }
       if (password !== confirm) { this.authError = '两次输入的密码不一致'; return; }
+      if (!regCode) { this.authError = '请输入注册码'; return; }
       this.authBusy = true; this.authError = '';
       try {
         const res = await fetch('/api/auth/register', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
+          body: JSON.stringify({ username, password, regCode }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { this.authError = data.detail || '注册失败'; return; }
@@ -372,7 +384,90 @@ createApp({
       try {
         await this.api(`/api/users/${u.id}`, { method: 'DELETE' });
         this.users = this.users.filter((x) => x.id !== u.id);
+        this.loadRegCodes();   // 删除用户后其注册码回退为未使用，刷新状态
       } catch (e) { alert('删除用户失败：' + e.message); }
+    },
+
+    // ---------- 注册码管理（用户管理页，仅管理员） ----------
+    async loadRegCodes() {
+      try {
+        const res = await this.api('/api/users/codes');
+        this.regCodes = res.codes || [];
+      } catch (e) { console.warn('加载注册码失败', e); }
+    },
+    openGenCodes() {
+      this.genCodesError = '';
+      this.genCodeForm = { count: 10, length: 8, permanent: true, expiresDate: '' };
+      this.genCodesOpen = true;
+    },
+    closeGenCodes() {
+      this.genCodesOpen = false;
+      this.genCodesError = '';
+    },
+    /** 确认生成：校验数量/位数/有效期 → 调接口，成功后新码排最前。 */
+    async submitGenCodes() {
+      const f = this.genCodeForm;
+      if (!f.count || f.count < 1) { this.genCodesError = '生成数量需 ≥ 1'; return; }
+      if (!f.length || f.length < 4 || f.length > 16) { this.genCodesError = '注册码位数需在 4-16 之间'; return; }
+      if (!f.permanent && !f.expiresDate) { this.genCodesError = '请选择有效期'; return; }
+      const body = { count: Math.trunc(f.count), length: Math.trunc(f.length) };
+      if (!f.permanent) {
+        const d = new Date(f.expiresDate + 'T23:59:59.999');   // 有效期至所选日期的当天结束
+        body.expires_at = d.toISOString();
+      }
+      this.genCodesSaving = true; this.genCodesError = '';
+      try {
+        const res = await this.api('/api/users/codes', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        });
+        this.regCodes = (res.created || []).concat(this.regCodes);
+        this.closeGenCodes();
+        alert(`已生成 ${(res.created || []).length} 个注册码`);
+      } catch (e) {
+        this.genCodesError = e.message;
+      } finally {
+        this.genCodesSaving = false;
+      }
+    },
+    /** 批量删除注册码（ids 数组）。 */
+    async deleteCodes(ids) {
+      if (!ids.length) return;
+      try {
+        await this.api('/api/users/codes', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        });
+        this.regCodes = this.regCodes.filter((c) => !ids.includes(c.id));
+        this.regSelected = this.regSelected.filter((id) => !ids.includes(id));
+      } catch (e) { alert('删除注册码失败：' + e.message); }
+    },
+    async deleteCode(c) {
+      if (!confirm(`确定删除注册码「${c.code}」？`)) return;
+      await this.deleteCodes([c.id]);
+    },
+    async deleteSelectedCodes() {
+      if (!this.regSelected.length) return;
+      if (!confirm(`确定删除选中的 ${this.regSelected.length} 个注册码？`)) return;
+      await this.deleteCodes(this.regSelected.slice());
+    },
+    toggleAllCodes(e) {
+      // 全选仅覆盖未使用的注册码（已使用的不可删除）
+      this.regSelected = e.target.checked
+        ? this.regCodes.filter((c) => this.codeStatus(c) !== 'used').map((c) => c.id) : [];
+    },
+    /** 注册码状态：used=已使用 / expired=未使用但已过期 / unused=未使用。 */
+    codeStatus(c) {
+      if (c.status === 1) return 'used';
+      if (c.expires_at && new Date(c.expires_at).getTime() < Date.now()) return 'expired';
+      return 'unused';
+    },
+    codeStatusText(c) {
+      return { unused: '未使用', used: '已使用', expired: '已过期' }[this.codeStatus(c)] || '--';
+    },
+    /** 有效期显示：永久 或 截止时间。 */
+    fmtExpiry(c) {
+      if (!c.expires_at) return '永久';
+      return this.fmtDate(c.expires_at);
     },
     /** 用户注册时间显示为本地 `YYYY-MM-DD HH:mm`。 */
     fmtDate(iso) {
@@ -389,7 +484,7 @@ createApp({
         this.measureObs = new ResizeObserver(() => this.measureStage());
         this.measureObs.observe(this.$refs.stageBox);
       }
-      if (this.tab === 'users') this.loadUsers();
+      if (this.tab === 'users') { this.loadUsers(); this.loadRegCodes(); }
       this.refreshAll();
       if (!this.pollTimer) this.pollTimer = setInterval(() => this.refreshAll(), POLL_INTERVAL);
     },
@@ -641,7 +736,7 @@ createApp({
 
     switchTab(t) {
       this.tab = t;
-      if (t === 'users') this.loadUsers();         // 进入用户管理页刷新列表
+      if (t === 'users') { this.loadUsers(); this.loadRegCodes(); }   // 进入用户管理页刷新列表与注册码
       this.$nextTick(() => this.measureStage());   // 主/订阅页切换后重测舞台尺寸
       this.refreshAll();
     },
